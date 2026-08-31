@@ -19,9 +19,9 @@ echo "Server host:   ${HOST}"
 echo "Server port:   ${PORT}"
 
 if [ -n "${DSH_EXEC:-}" ] && [ -x "${DSH_EXEC}" ]; then
-  exec "${DSH_EXEC}" web --host "${HOST}" --port "${PORT}" --patch "${PATCH_FILE}" "$@"
+  exec "${DSH_EXEC}" web --patch "${PATCH_FILE}" --host "${HOST}" --port "${PORT}" "$@"
 elif command -v dsh >/dev/null 2>&1; then
-  exec dsh web --host "${HOST}" --port "${PORT}" --patch "${PATCH_FILE}" "$@"
+  exec dsh web --patch "${PATCH_FILE}" --host "${HOST}" --port "${PORT}" "$@"
 else
   echo "Error: 'dsh' binary not found on PATH. Set DSH_EXEC=/path/to/dsh or ensure it is in PATH." >&2
   exit 1
