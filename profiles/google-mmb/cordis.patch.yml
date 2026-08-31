@@ -15,6 +15,10 @@
 - id: session-log-deepseek
   disabled: true
 
+# 4. Disable DeepSeek LLM API extensions
+- id: deepseek-llm-api-extensions
+  disabled: true
+
 # 4. Repoint default model to Google Gemini
 - id: agent-default-model
   config:
