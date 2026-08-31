@@ -19,7 +19,11 @@
 - id: deepseek-llm-api-extensions
   disabled: true
 
-# 5. Disable OpenTelemetry session logging when exporter URL is unset
+# 5. Disable DeepSeek plugin package inventory
+- id: plugin-package-inventory-deepseek
+  disabled: true
+
+# 6. Disable OpenTelemetry session logging when exporter URL is unset
 - id: session-telemetry-otel
   disabled: true
 
