@@ -15,14 +15,17 @@
   "types": "lib/types/index.d.ts",
   "exports": {
     ".": {
+      "import": "./src/index.ts",
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
     "./invariant": {
+      "import": "./src/invariant.ts",
       "types": "./lib/types/invariant.d.ts",
       "default": "./lib/invariant.js"
     },
     "./client": {
+      "import": "./src/client/index.ts",
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
