@@ -1,0 +1,42 @@
+# ==============================================================================
+# Enterprise Google MMB Cordis Patch Layer
+# Mounts Google MMB and Antigravity plugins while eliminating DeepSeek API calls
+# ==============================================================================
+
+# 1. Disable DeepSeek LLM adapter (zero calls to api.deepseek.com)
+- id: llm-deepseek
+  disabled: true
+
+# 2. Disable DeepSeek web search (zero calls to search.deepseek.com)
+- id: web-search-deepseek
+  disabled: true
+
+# 3. Disable DeepSeek session telemetry
+- id: session-log-deepseek
+  disabled: true
+
+# 4. Repoint default model to Google Gemini
+- id: agent-default-model
+  config:
+    provider: google
+    model: gemini-3.7-flash
+
+# 5. Mount Google MMB and Antigravity plugins
+- insert:
+    - id: tool-antigravity
+      name: '@google/dsh-tool-antigravity'
+      config:
+        defaultModel: gemini-3.7-flash-high
+        timeoutMs: 300000
+
+    - id: subagent-antigravity-cli
+      name: '@google/dsh-subagent-antigravity-cli'
+      config:
+        defaultModel: gemini-3.7-flash
+        gcpLocation: global
+
+    - id: mmb-migration-workbench
+      name: '@google/dsh-mmb-migration-workbench'
+      config:
+        enableRuntimeSkills: true
+        enableHttpRoutes: true

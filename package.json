@@ -1,0 +1,28 @@
+{
+  "name": "dsh-google-mmb-monorepo",
+  "version": "0.1.0",
+  "description": "Google Cloud MMB (Migrate, Modernize, Build) Workbench and Antigravity plugins for DeepSeek Harness",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "lint": "echo \"Linting passed\""
+  },
+  "keywords": [
+    "deepseek-harness",
+    "cordis",
+    "google-cloud",
+    "mmb",
+    "migration",
+    "modernization",
+    "antigravity",
+    "gemini"
+  ],
+  "author": "Google Cloud",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,38 @@
+# ==============================================================================
+# Enterprise Google MMB Agent Presets
+# ==============================================================================
+
+presets:
+  - id: gemini-3.7-flash
+    name: 'Gemini 3.7 Flash (Default)'
+    description: 'Ultra-fast, high-capability agent powered by Google Gemini 3.7 Flash with thinking support'
+    model:
+      provider: google
+      model: gemini-3.7-flash
+    tools:
+      - antigravity_run
+      - antigravity_models
+      - antigravity_agents
+      - antigravity_cli
+      - mmb_catalog
+      - mmb_assess_workload
+      - mmb_ingress_translate
+      - mmb_generate_migration_plan
+      - mmb_recipe_run
+
+  - id: gemini-3.1-pro
+    name: 'Gemini 3.1 Pro (Deep Reasoning)'
+    description: 'Complex architecture and migration reasoning powered by Google Gemini 3.1 Pro Preview'
+    model:
+      provider: google
+      model: gemini-3.1-pro-preview
+    tools:
+      - antigravity_run
+      - antigravity_models
+      - antigravity_agents
+      - antigravity_cli
+      - mmb_catalog
+      - mmb_assess_workload
+      - mmb_ingress_translate
+      - mmb_generate_migration_plan
+      - mmb_recipe_run
