@@ -29,12 +29,12 @@ export interface Config {
 
 export const Config: z<Config> = z.object({
   binaryPath: z.string(),
-  defaultModel: z.string().default('gemini-3.7-flash-high'),
+  defaultModel: z.string().default('gemini-3.8-flash-high'),
   timeoutMs: z.number().default(300_000),
 })
 
 const ANTIGRAVITY_SYSTEM_PROMPT = `You have access to the Antigravity (agy) CLI tool via \`antigravity_run\`, \`antigravity_models\`, and \`antigravity_agents\`.
-Use \`antigravity_run\` to delegate complex subtasks, execute prompts against the Gemini model family (such as Gemini 3.7 Flash, Gemini 3.6 Flash, Gemini 3.1 Pro), or run standalone AI agent tasks.`
+Use \`antigravity_run\` to delegate complex subtasks, execute prompts against the Gemini model family (such as Gemini 3.8 Flash, Gemini 3.7 Flash, Gemini 3.1 Pro), or run standalone AI agent tasks.`
 
 export function apply(ctx: Context, config: Config): void {
   const binary = findAgyBinary(config.binaryPath)
@@ -49,7 +49,7 @@ export function apply(ctx: Context, config: Config): void {
     defineTool({
       name: 'antigravity_run',
       description:
-        'Execute a prompt or subtask through the Antigravity (agy) CLI powered by Gemini models. Supports model selection (e.g. gemini-3.7-flash-high, gemini-3.7-flash-medium, gemini-3.7-flash-low, gemini-3.1-pro-high) and reasoning effort levels.',
+        'Execute a prompt or subtask through the Antigravity (agy) CLI powered by Gemini models. Supports model selection (e.g. gemini-3.8-flash-high, gemini-3.7-flash-high, gemini-3.7-flash-medium, gemini-3.7-flash-low, gemini-3.1-pro-high) and reasoning effort levels.',
       parameters: {
         prompt: {
           type: 'string',
@@ -58,7 +58,7 @@ export function apply(ctx: Context, config: Config): void {
         },
         model: {
           type: 'string',
-          description: 'Target model id (e.g. gemini-3.7-flash-high, gemini-3.7-flash-medium, gemini-3.7-flash-low, gemini-3.6-flash-high, gemini-3.1-pro-high). Defaults to configured defaultModel.',
+          description: 'Target model id (e.g. gemini-3.8-flash-high, gemini-3.7-flash-high, gemini-3.7-flash-medium, gemini-3.7-flash-low, gemini-3.6-flash-high, gemini-3.1-pro-high). Defaults to configured defaultModel.',
         },
         effort: {
           type: 'string',
@@ -95,7 +95,7 @@ export function apply(ctx: Context, config: Config): void {
         const timeoutMs = args.timeout_ms ?? config.timeoutMs
         const options: AgyRunOptions = {
           prompt: args.prompt,
-          model: args.model ?? config.defaultModel ?? 'gemini-3.7-flash-high',
+          model: args.model ?? config.defaultModel ?? 'gemini-3.8-flash-high',
           ...args.effort !== undefined ? { effort: args.effort as 'low' | 'medium' | 'high' } : {},
           ...args.mode !== undefined ? { mode: args.mode as 'accept-edits' | 'plan' } : {},
           ...args.dangerously_skip_permissions !== undefined ? { dangerouslySkipPermissions: args.dangerously_skip_permissions } : {},

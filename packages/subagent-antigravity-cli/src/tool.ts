@@ -83,7 +83,8 @@ export function createAntigravityTool(config: AntigravityCliConfig) {
       switch (args.action) {
         case 'new_conversation': {
           cliArgs = ['new-conversation']
-          if (args.model) cliArgs.push(`--model=${args.model}`)
+          const model = args.model ?? config.defaultModel
+          if (model) cliArgs.push(`--model=${model}`)
           if (args.title) cliArgs.push(`--title=${args.title}`)
           if (args.prompt) cliArgs.push(args.prompt)
           break

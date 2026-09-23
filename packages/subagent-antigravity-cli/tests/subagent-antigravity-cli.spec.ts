@@ -25,7 +25,7 @@ describe('subagent-antigravity-cli', () => {
   it('creates the antigravity_cli tool with valid schema and parameters', () => {
     const tool = createAntigravityTool({
       binaryPath: '',
-      defaultModel: 'gemini-3.7-flash',
+      defaultModel: 'gemini-3.8-flash',
       gcpProject: 'demo-project',
       gcpLocation: 'global',
       env: {},

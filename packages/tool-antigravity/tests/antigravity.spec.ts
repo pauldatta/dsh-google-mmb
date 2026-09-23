@@ -6,7 +6,7 @@ describe('tool-antigravity', () => {
   it('exports name and valid config defaults', () => {
     expect(name).toBe('tool-antigravity')
     const cfg = Config({})
-    expect(cfg.defaultModel).toBe('gemini-3.7-flash-high')
+    expect(cfg.defaultModel).toBe('gemini-3.8-flash-high')
     expect(cfg.timeoutMs).toBe(300_000)
   })
 

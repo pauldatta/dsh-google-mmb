@@ -31,20 +31,20 @@
 - id: agent-default-model
   config:
     provider: google
-    model: gemini-3.7-flash
+    model: gemini-3.8-flash
 
 # 5. Mount Google MMB and Antigravity plugins
 - insert:
     - id: tool-antigravity
       name: '@google/dsh-tool-antigravity'
       config:
-        defaultModel: gemini-3.7-flash-high
+        defaultModel: gemini-3.8-flash-high
         timeoutMs: 300000
 
     - id: subagent-antigravity-cli
       name: '@google/dsh-subagent-antigravity-cli'
       config:
-        defaultModel: gemini-3.7-flash
+        defaultModel: gemini-3.8-flash
         gcpLocation: global
 
     - id: mmb-migration-workbench

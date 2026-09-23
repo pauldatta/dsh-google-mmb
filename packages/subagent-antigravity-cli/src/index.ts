@@ -25,7 +25,7 @@ export const inject = ['subagents', 'subprocess', 'tools']
 
 export const Config: z<AntigravityCliConfig> = z.object({
   binaryPath: z.string().default(''),
-  defaultModel: z.string().default('gemini-3.7-flash'),
+  defaultModel: z.string().default('gemini-3.8-flash'),
   gcpProject: z.string().default(''),
   gcpLocation: z.string().default('global'),
   env: z.dict(z.string()).default({}),
