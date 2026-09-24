@@ -8,7 +8,8 @@ import type {
   DimensionScores,
   PenaltyDeduction,
   WorkloadAssessmentRequest,
-  WorkloadAssessmentResult,
+  WorkloadType,
+  CloudSource,
 } from './types.ts'
 
 export interface RubricEvaluation {
@@ -16,6 +17,54 @@ export interface RubricEvaluation {
   readonly calibratedScore: number
   readonly dimensionScores: DimensionScores
   readonly penalties: readonly PenaltyDeduction[]
+}
+
+export interface WavePlanItem {
+  readonly wave: string
+  readonly durationWeeks: number
+  readonly focus: string
+  readonly deliverables: readonly string[]
+  readonly exitCriteria: string
+}
+
+export interface EffortBreakdown {
+  readonly discoveryWeeks: number
+  readonly engineeringWeeks: number
+  readonly testingCutoverWeeks: number
+}
+
+export interface EffortEstimate {
+  readonly baselinePersonWeeks: number
+  readonly aiAcceleratedPersonWeeks: number
+  readonly savingsPercent: number
+  readonly breakdown: EffortBreakdown
+}
+
+export interface TcoModel {
+  readonly estimatedAnnualSavingsPercent: number
+  readonly licenseOptimization: string
+  readonly opsEfficiencyGain: string
+  readonly riskMitigationSummary: string
+}
+
+export interface WorkloadAssessmentResult {
+  readonly workloadType: WorkloadType
+  readonly sourcePlatform: CloudSource
+  readonly sourceTechnology: string
+  readonly rawScore: number
+  readonly calibratedScore: number
+  readonly dimensionScores: DimensionScores
+  readonly penaltiesApplied: readonly PenaltyDeduction[]
+  readonly complexity: 'Low' | 'Moderate' | 'High' | 'Critical'
+  readonly recommendedTarget: string
+  readonly recommendedBlueprints: readonly string[]
+  readonly recommendedSkills: readonly string[]
+  readonly actionPlan: readonly string[]
+  readonly riskFactors: readonly string[]
+  readonly wavePlan: readonly WavePlanItem[]
+  readonly effortEstimate: EffortEstimate
+  readonly tcoModel: TcoModel
+  readonly markdownReport: string
 }
 
 /**
@@ -84,7 +133,6 @@ export function evaluateRubric(
   }
 }
 
-
 /**
  * Assesses an enterprise customer workload across Migrate, Modernize, and Build pillars.
  */
@@ -147,6 +195,228 @@ function augmentRisksAndPlans(
   return { actionPlan, riskFactors }
 }
 
+export function generateWavePlan(
+  _workloadType: WorkloadType,
+  scale: 'small' | 'medium' | 'large' | 'enterprise' | undefined,
+  complexity: 'Low' | 'Moderate' | 'High' | 'Critical',
+): WavePlanItem[] {
+  const isEnterprise = scale === 'enterprise' || complexity === 'Critical'
+  const isLarge = scale === 'large' || complexity === 'High'
+
+  const wave0Weeks = isEnterprise ? 3 : 2
+  const wave1Weeks = isEnterprise ? 4 : isLarge ? 3 : 2
+  const wave2Weeks = isEnterprise ? 6 : isLarge ? 5 : 4
+  const wave3Weeks = isEnterprise ? 3 : 2
+
+  return [
+    {
+      wave: 'Wave 0: Discovery & Landing Zone',
+      durationWeeks: wave0Weeks,
+      focus: 'Automated workspace scanning, dependency discovery, security baseline, and target GCP landing zone setup.',
+      deliverables: [
+        'Source architecture inventory & dependency matrix',
+        'GCP VPC network peering & IAM Workload Identity federation',
+        'Automated AST migration pipeline pre-flight',
+      ],
+      exitCriteria: 'Stakeholder sign-off on discovery metrics and security compliance.',
+    },
+    {
+      wave: 'Wave 1: Pilot & Dual-Run',
+      durationWeeks: wave1Weeks,
+      focus: 'Deploy pilot workload slice, configure CDC replication/canary routing, establish rollback checkpoints.',
+      deliverables: [
+        'Pilot workload deployed to GCP target service',
+        'Dual-run telemetry & shadow verification pipeline',
+        'Automated regression test baseline',
+      ],
+      exitCriteria: 'Zero data drift or 99.99% parity for 7 consecutive days in dual-run.',
+    },
+    {
+      wave: 'Wave 2: Core Migration & Modernization',
+      durationWeeks: wave2Weeks,
+      focus: 'Full AST-driven transformation, data backfill, and production cluster cutover preparation.',
+      deliverables: [
+        'Automated recipe execution across all modules',
+        'Full historical data backfill & catch-up sync',
+        'Disaster recovery and multi-region failover rehearsal',
+      ],
+      exitCriteria: 'Performance and throughput equal or superior to source environment under load testing.',
+    },
+    {
+      wave: 'Wave 3: Production Cutover & Decommission',
+      durationWeeks: wave3Weeks,
+      focus: 'DNS traffic migration, legacy decommissioning, and post-cutover AI enablement.',
+      deliverables: [
+        'Production DNS / client cutover execution',
+        '24/7 hypercare monitoring & SLO alerting in Cloud Monitoring',
+        'Legacy platform decommission and cost shutdown confirmation',
+      ],
+      exitCriteria: 'Production steady-state error rate < 0.01% and zero P1 incidents for 14 days.',
+    },
+  ]
+}
+
+export function generateEffortEstimate(
+  scale: 'small' | 'medium' | 'large' | 'enterprise' | undefined,
+  complexity: 'Low' | 'Moderate' | 'High' | 'Critical',
+): EffortEstimate {
+  let baseline = 16
+  if (scale === 'enterprise' || complexity === 'Critical') {
+    baseline = 52
+  } else if (scale === 'large' || complexity === 'High') {
+    baseline = 36
+  } else if (scale === 'medium' || complexity === 'Moderate') {
+    baseline = 24
+  }
+
+  const aiAccelerated = Math.round(baseline * 0.55)
+  const savingsPercent = Math.round((1 - aiAccelerated / baseline) * 100)
+
+  const discoveryWeeks = Math.max(1, Math.round(aiAccelerated * 0.2))
+  const engineeringWeeks = Math.max(2, Math.round(aiAccelerated * 0.55))
+  const testingCutoverWeeks = Math.max(1, aiAccelerated - discoveryWeeks - engineeringWeeks)
+
+  return {
+    baselinePersonWeeks: baseline,
+    aiAcceleratedPersonWeeks: aiAccelerated,
+    savingsPercent,
+    breakdown: {
+      discoveryWeeks,
+      engineeringWeeks,
+      testingCutoverWeeks,
+    },
+  }
+}
+
+export function generateTcoModel(workloadType: WorkloadType): TcoModel {
+  switch (workloadType) {
+    case 'database':
+      return {
+        estimatedAnnualSavingsPercent: 42,
+        licenseOptimization: 'Eliminate proprietary database core license and annual maintenance fees by migrating to BigQuery serverless & AlloyDB.',
+        opsEfficiencyGain: '65% reduction in DBA maintenance toil through Google-managed automatic vacuuming, high-availability replication, and backups.',
+        riskMitigationSummary: 'Dual-run CDC replication eliminates cutover downtime; automated AST SQL translation minimizes schema refactoring defects.',
+      }
+    case 'kubernetes':
+      return {
+        estimatedAnnualSavingsPercent: 32,
+        licenseOptimization: 'Eliminate third-party Ingress controller support licensing with Google-native GKE Gateway API & Cloud Load Balancing.',
+        opsEfficiencyGain: '55% reduction in ingress routing management toil via multi-cluster GatewayClasses and automated certificate rotation.',
+        riskMitigationSummary: 'Declarative HTTPRoute validation and canary traffic splitting guarantee zero-downtime service transition.',
+      }
+    case 'data-pipeline':
+      return {
+        estimatedAnnualSavingsPercent: 48,
+        licenseOptimization: 'Retire legacy on-prem Cloudera/Hadoop software subscriptions and hardware refresh cycles in favor of Dataproc Serverless.',
+        opsEfficiencyGain: '70% reduction in cluster management and capacity planning overhead through on-demand autoscaling serverless batches.',
+        riskMitigationSummary: 'BigLake Iceberg table storage guarantees open format compliance with automated data verification checksums.',
+      }
+    case 'application':
+    default:
+      return {
+        estimatedAnnualSavingsPercent: 38,
+        licenseOptimization: 'Eliminate Windows Server / commercial application server licensing via Linux distroless containers on Cloud Run.',
+        opsEfficiencyGain: '60% operational reduction by eliminating VM patching, OS maintenance, and static cluster sizing.',
+        riskMitigationSummary: 'Automated Spring Boot 3 / .NET 8 recipes ensure zero syntax regressions with container test sandboxes.',
+      }
+  }
+}
+
+export function generateMarkdownReport(data: {
+  workloadType: WorkloadType
+  sourcePlatform: CloudSource
+  sourceTechnology: string
+  calibratedScore: number
+  rawScore: number
+  complexity: string
+  dimensionScores: DimensionScores
+  penalties: readonly PenaltyDeduction[]
+  recommendedTarget: string
+  recommendedBlueprints: readonly string[]
+  recommendedSkills: readonly string[]
+  actionPlan: readonly string[]
+  riskFactors: readonly string[]
+  wavePlan: readonly WavePlanItem[]
+  effortEstimate: EffortEstimate
+  tcoModel: TcoModel
+}): string {
+  const {
+    workloadType,
+    sourcePlatform,
+    sourceTechnology,
+    calibratedScore,
+    complexity,
+    dimensionScores,
+    penalties,
+    recommendedTarget,
+    recommendedBlueprints,
+    recommendedSkills,
+    actionPlan,
+    riskFactors,
+    wavePlan,
+    effortEstimate,
+    tcoModel,
+  } = data
+
+  const totalWaveWeeks = wavePlan.reduce((sum, w) => sum + w.durationWeeks, 0)
+
+  return `# Executive Migration & Modernization Assessment
+**Workload:** ${sourceTechnology} | **Source:** ${sourcePlatform.toUpperCase()} | **Type:** ${workloadType.toUpperCase()}
+**Calibrated Feasibility Score:** ${calibratedScore.toFixed(1)} / 5.0 | **Complexity:** ${complexity}
+
+---
+
+## 1. Executive Summary & Recommended Target
+- **Target Google Cloud Architecture:** ${recommendedTarget}
+- **Recommended Blueprints:** ${recommendedBlueprints.join(', ')}
+- **Mature Agent Skills:** ${recommendedSkills.map(s => `\`/${s}\``).join(', ')}
+
+### Calibrated Scoring Rubric
+- **Code Maturity (35%):** ${dimensionScores.codeMaturity.toFixed(1)} / 5.0
+- **Market Fit (35%):** ${dimensionScores.marketFit.toFixed(1)} / 5.0
+- **Architectural Innovation (30%):** ${dimensionScores.architecturalInnovation.toFixed(1)} / 5.0
+${penalties.length > 0 ? `\n**Penalties Applied:**\n${penalties.map(p => `- ${p.reason} (-${p.deduction.toFixed(1)})`).join('\n')}\n` : ''}
+
+---
+
+## 2. 4-Wave Phased Migration Plan (${totalWaveWeeks} Weeks Total)
+| Wave | Duration | Focus | Key Deliverables | Exit Criteria |
+| :--- | :--- | :--- | :--- | :--- |
+${wavePlan.map(w => `| **${w.wave}** | ${w.durationWeeks} wks | ${w.focus} | ${w.deliverables.join('; ')} | ${w.exitCriteria} |`).join('\n')}
+
+---
+
+## 3. Effort Modeling & AI Acceleration Impact
+- **Baseline Migration Effort:** ${effortEstimate.baselinePersonWeeks} person-weeks
+- **MMB AI-Accelerated Effort:** ${effortEstimate.aiAcceleratedPersonWeeks} person-weeks (**${effortEstimate.savingsPercent}% reduction**)
+- **Effort Breakdown:**
+  - Discovery & Architecture: **${effortEstimate.breakdown.discoveryWeeks} person-weeks**
+  - Engineering & AST Transformation: **${effortEstimate.breakdown.engineeringWeeks} person-weeks**
+  - Testing, Validation & Cutover: **${effortEstimate.breakdown.testingCutoverWeeks} person-weeks**
+
+---
+
+## 4. TCO & Financial Optimization
+- **Estimated Annual Infrastructure & Ops Savings:** **${tcoModel.estimatedAnnualSavingsPercent}%**
+- **License Optimization:** ${tcoModel.licenseOptimization}
+- **Operational Efficiency:** ${tcoModel.opsEfficiencyGain}
+- **Risk Mitigation:** ${tcoModel.riskMitigationSummary}
+
+---
+
+## 5. Action Plan & Risk Factors
+
+### Action Plan
+${actionPlan.map((step, idx) => `${idx + 1}. ${step}`).join('\n')}
+
+### Risk Factors & Guardrails
+${riskFactors.map(rf => `- ⚠️ ${rf}`).join('\n')}
+
+---
+*Report generated by Google MMB Migration Center Workbench on DeepSeek Harness.*
+`
+}
+
 function assessDatabaseWorkload(request: WorkloadAssessmentRequest): WorkloadAssessmentResult {
   const techLower = request.sourceTechnology.toLowerCase()
   const isOracle = techLower.includes('oracle')
@@ -198,6 +468,28 @@ function assessDatabaseWorkload(request: WorkloadAssessmentRequest): WorkloadAss
     ],
   )
 
+  const wavePlan = generateWavePlan('database', request.workloadScale, complexity)
+  const effortEstimate = generateEffortEstimate(request.workloadScale, complexity)
+  const tcoModel = generateTcoModel('database')
+  const markdownReport = generateMarkdownReport({
+    workloadType: 'database',
+    sourcePlatform: request.sourcePlatform,
+    sourceTechnology: request.sourceTechnology,
+    calibratedScore: evalResult.calibratedScore,
+    rawScore: evalResult.rawScore,
+    complexity,
+    dimensionScores: evalResult.dimensionScores,
+    penalties: evalResult.penalties,
+    recommendedTarget,
+    recommendedBlueprints: blueprints,
+    recommendedSkills: skills,
+    actionPlan,
+    riskFactors,
+    wavePlan,
+    effortEstimate,
+    tcoModel,
+  })
+
   return {
     workloadType: 'database',
     sourcePlatform: request.sourcePlatform,
@@ -212,12 +504,19 @@ function assessDatabaseWorkload(request: WorkloadAssessmentRequest): WorkloadAss
     recommendedSkills: skills,
     actionPlan,
     riskFactors,
+    wavePlan,
+    effortEstimate,
+    tcoModel,
+    markdownReport,
   }
 }
 
 function assessKubernetesWorkload(request: WorkloadAssessmentRequest): WorkloadAssessmentResult {
   const evalResult = evaluateRubric(3.0, 4.5, 3.8, { hasTests: request.hasTests })
   const complexity = computeComplexity('Moderate', request.workloadScale)
+  const blueprints = ['gke-migration-agent', 'k8s-hybrid-neg-controller']
+  const skills = ['mmb-ingress2gateway']
+  const recommendedTarget = 'GKE Gateway API (GatewayClass gke-l7-global-external-managed + HTTPRoute)'
   const { actionPlan, riskFactors } = augmentRisksAndPlans(
     request,
     [
@@ -233,6 +532,28 @@ function assessKubernetesWorkload(request: WorkloadAssessmentRequest): WorkloadA
     ],
   )
 
+  const wavePlan = generateWavePlan('kubernetes', request.workloadScale, complexity)
+  const effortEstimate = generateEffortEstimate(request.workloadScale, complexity)
+  const tcoModel = generateTcoModel('kubernetes')
+  const markdownReport = generateMarkdownReport({
+    workloadType: 'kubernetes',
+    sourcePlatform: request.sourcePlatform,
+    sourceTechnology: request.sourceTechnology,
+    calibratedScore: evalResult.calibratedScore,
+    rawScore: evalResult.rawScore,
+    complexity,
+    dimensionScores: evalResult.dimensionScores,
+    penalties: evalResult.penalties,
+    recommendedTarget,
+    recommendedBlueprints: blueprints,
+    recommendedSkills: skills,
+    actionPlan,
+    riskFactors,
+    wavePlan,
+    effortEstimate,
+    tcoModel,
+  })
+
   return {
     workloadType: 'kubernetes',
     sourcePlatform: request.sourcePlatform,
@@ -242,17 +563,24 @@ function assessKubernetesWorkload(request: WorkloadAssessmentRequest): WorkloadA
     dimensionScores: evalResult.dimensionScores,
     penaltiesApplied: evalResult.penalties,
     complexity,
-    recommendedTarget: 'GKE Gateway API (GatewayClass gke-l7-global-external-managed + HTTPRoute)',
-    recommendedBlueprints: ['gke-migration-agent', 'k8s-hybrid-neg-controller'],
-    recommendedSkills: ['mmb-ingress2gateway'],
+    recommendedTarget,
+    recommendedBlueprints: blueprints,
+    recommendedSkills: skills,
     actionPlan,
     riskFactors,
+    wavePlan,
+    effortEstimate,
+    tcoModel,
+    markdownReport,
   }
 }
 
 function assessDataPipelineWorkload(request: WorkloadAssessmentRequest): WorkloadAssessmentResult {
   const evalResult = evaluateRubric(3.2, 4.4, 3.6, { hasTests: request.hasTests })
   const complexity = computeComplexity('High', request.workloadScale)
+  const blueprints = ['hadoop-to-lakehouse-migration-demo', 'legacy-detox-demo', 'dataflow-bigquery-change-data-capture']
+  const skills = ['mmb-legacy-detox']
+  const recommendedTarget = 'Dataproc Serverless + BigLake (Apache Iceberg) + Dataplex Governance'
   const { actionPlan, riskFactors } = augmentRisksAndPlans(
     request,
     [
@@ -268,6 +596,28 @@ function assessDataPipelineWorkload(request: WorkloadAssessmentRequest): Workloa
     ],
   )
 
+  const wavePlan = generateWavePlan('data-pipeline', request.workloadScale, complexity)
+  const effortEstimate = generateEffortEstimate(request.workloadScale, complexity)
+  const tcoModel = generateTcoModel('data-pipeline')
+  const markdownReport = generateMarkdownReport({
+    workloadType: 'data-pipeline',
+    sourcePlatform: request.sourcePlatform,
+    sourceTechnology: request.sourceTechnology,
+    calibratedScore: evalResult.calibratedScore,
+    rawScore: evalResult.rawScore,
+    complexity,
+    dimensionScores: evalResult.dimensionScores,
+    penalties: evalResult.penalties,
+    recommendedTarget,
+    recommendedBlueprints: blueprints,
+    recommendedSkills: skills,
+    actionPlan,
+    riskFactors,
+    wavePlan,
+    effortEstimate,
+    tcoModel,
+  })
+
   return {
     workloadType: 'data-pipeline',
     sourcePlatform: request.sourcePlatform,
@@ -277,11 +627,15 @@ function assessDataPipelineWorkload(request: WorkloadAssessmentRequest): Workloa
     dimensionScores: evalResult.dimensionScores,
     penaltiesApplied: evalResult.penalties,
     complexity,
-    recommendedTarget: 'Dataproc Serverless + BigLake (Apache Iceberg) + Dataplex Governance',
-    recommendedBlueprints: ['hadoop-to-lakehouse-migration-demo', 'legacy-detox-demo', 'dataflow-bigquery-change-data-capture'],
-    recommendedSkills: ['mmb-legacy-detox'],
+    recommendedTarget,
+    recommendedBlueprints: blueprints,
+    recommendedSkills: skills,
     actionPlan,
     riskFactors,
+    wavePlan,
+    effortEstimate,
+    tcoModel,
+    markdownReport,
   }
 }
 
@@ -292,6 +646,13 @@ function assessApplicationWorkload(request: WorkloadAssessmentRequest): Workload
 
   const evalResult = evaluateRubric(2.8, 4.3, 3.2, { hasTests: request.hasTests })
   const complexity = computeComplexity('Moderate', request.workloadScale)
+  const blueprints = isJava
+    ? ['java-modernization-demo', 'build-with-gemini-demo']
+    : isDotnet
+      ? ['dotnet-modernization-demo']
+      : ['java-modernization-demo', 'dotnet-modernization-demo']
+  const skills = ['mmb-app-modernization']
+  const recommendedTarget = 'Cloud Run (Serverless Containers) + Artifact Registry + Cloud SQL'
   const { actionPlan, riskFactors } = augmentRisksAndPlans(
     request,
     [
@@ -307,6 +668,28 @@ function assessApplicationWorkload(request: WorkloadAssessmentRequest): Workload
     ],
   )
 
+  const wavePlan = generateWavePlan('application', request.workloadScale, complexity)
+  const effortEstimate = generateEffortEstimate(request.workloadScale, complexity)
+  const tcoModel = generateTcoModel('application')
+  const markdownReport = generateMarkdownReport({
+    workloadType: 'application',
+    sourcePlatform: request.sourcePlatform,
+    sourceTechnology: request.sourceTechnology,
+    calibratedScore: evalResult.calibratedScore,
+    rawScore: evalResult.rawScore,
+    complexity,
+    dimensionScores: evalResult.dimensionScores,
+    penalties: evalResult.penalties,
+    recommendedTarget,
+    recommendedBlueprints: blueprints,
+    recommendedSkills: skills,
+    actionPlan,
+    riskFactors,
+    wavePlan,
+    effortEstimate,
+    tcoModel,
+  })
+
   return {
     workloadType: 'application',
     sourcePlatform: request.sourcePlatform,
@@ -316,14 +699,14 @@ function assessApplicationWorkload(request: WorkloadAssessmentRequest): Workload
     dimensionScores: evalResult.dimensionScores,
     penaltiesApplied: evalResult.penalties,
     complexity,
-    recommendedTarget: 'Cloud Run (Serverless Containers) + Artifact Registry + Cloud SQL',
-    recommendedBlueprints: isJava
-      ? ['java-modernization-demo', 'build-with-gemini-demo']
-      : isDotnet
-        ? ['dotnet-modernization-demo']
-        : ['java-modernization-demo', 'dotnet-modernization-demo'],
-    recommendedSkills: ['mmb-app-modernization'],
+    recommendedTarget,
+    recommendedBlueprints: blueprints,
+    recommendedSkills: skills,
     actionPlan,
     riskFactors,
+    wavePlan,
+    effortEstimate,
+    tcoModel,
+    markdownReport,
   }
 }

@@ -17,6 +17,7 @@ import { assessWorkload } from './assessment-engine.ts'
 import { translateIngressToGatewayApi } from './ingress-translator.ts'
 import { MODERNIZATION_RECIPES, runModernizationRecipe } from './recipes.ts'
 import { MMB_RUNTIME_SKILLS } from './skills.ts'
+import { scanWorkspaceDirectory } from './workspace-scanner.ts'
 import type { CloudSource, WorkloadAssessmentRequest, WorkloadType } from './types.ts'
 
 export * from './types.ts'
@@ -25,6 +26,7 @@ export * from './assessment-engine.ts'
 export * from './ingress-translator.ts'
 export * from './recipes.ts'
 export * from './skills.ts'
+export * from './workspace-scanner.ts'
 
 export const name = 'mmb-migration-workbench'
 export const inject = ['tools', 'systemPrompt']
@@ -43,10 +45,11 @@ export const Config: z<Config> = z.object({
 
 const MMB_SYSTEM_PROMPT = `You have access to the Google Cloud MMB Migration Workbench via tools:
 - \`mmb_catalog\`: Query the 46 evaluated cloud-solutions projects across Migrate, Modernize, and Build.
-- \`mmb_assess_workload\`: Perform automated migration feasibility assessments using the 2026 calibrated rubric.
-- \`mmb_ingress_translate\`: Translate Kubernetes Ingress manifests into GKE Gateway API (Gateway + HTTPRoute).
+- \`mmb_assess_workload\`: Perform automated migration feasibility assessments using the 2026 calibrated rubric with 4-wave planning, effort estimation, and TCO modeling.
+- \`mmb_ingress_translate\`: Translate Kubernetes Ingress manifests into GKE Gateway API (Gateway + HTTPRoute), supporting multi-document YAML streams.
 - \`mmb_generate_migration_plan\`: Generate end-to-end phased migration execution plans.
 - \`mmb_recipe_run\`: Execute code and architecture modernization recipes (Spring Boot 3, .NET 8 Linux, BigLake, etc.).
+- \`mmb_scan_workspace\`: Scan local workspace directory to detect technologies, workloads, and Kubernetes manifests.
 Use these tools to help enterprise customers migrate, modernize, and build workloads on Google Cloud.`
 
 export function apply(ctx: Context, config: Config): void {
@@ -185,7 +188,7 @@ function registerTools(ctx: Context): void {
   ctx.tools.register(
     defineTool({
       name: 'mmb_assess_workload',
-      description: 'Run automated migration readiness assessment on a target workload using the 2026 MMB calibrated rubric.',
+      description: 'Run automated migration readiness assessment on a target workload using the 2026 MMB calibrated rubric with wave planning, effort estimation, and TCO modeling.',
       parameters: {
         workload_type: {
           type: 'string',
@@ -230,6 +233,7 @@ function registerTools(ctx: Context): void {
             recommendedSkills: { type: 'array', items: { type: 'string' } },
             actionPlan: { type: 'array', items: { type: 'string' } },
             riskFactors: { type: 'array', items: { type: 'string' } },
+            markdownReport: { type: 'string' },
           },
         },
         render: (_args, value) => [{
@@ -268,6 +272,7 @@ function registerTools(ctx: Context): void {
           recommendedSkills: [...result.recommendedSkills],
           actionPlan: [...result.actionPlan],
           riskFactors: [...result.riskFactors],
+          markdownReport: result.markdownReport,
         }
       },
     }),
@@ -277,12 +282,12 @@ function registerTools(ctx: Context): void {
   ctx.tools.register(
     defineTool({
       name: 'mmb_ingress_translate',
-      description: 'Translate Kubernetes Ingress YAML manifests into GKE Gateway API (Gateway + HTTPRoute) resources.',
+      description: 'Translate Kubernetes Ingress YAML manifests into GKE Gateway API (Gateway + HTTPRoute) resources. Supports multi-document YAML streams.',
       parameters: {
         manifest: {
           type: 'string',
           required: true,
-          description: 'Kubernetes networking.k8s.io/v1 Ingress YAML manifest string.',
+          description: 'Kubernetes networking.k8s.io/v1 Ingress YAML manifest string (single or multi-document ---).',
         },
         gateway_name: {
           type: 'string',
@@ -494,6 +499,58 @@ function registerTools(ctx: Context): void {
       },
     }),
   )
+
+  // ── Tool 6: mmb_scan_workspace ───────────────────────────────────────────
+  ctx.tools.register(
+    defineTool({
+      name: 'mmb_scan_workspace',
+      description: 'Scan the local workspace to automatically detect technologies, workloads, Kubernetes manifests, and recommend modernization blueprints.',
+      parameters: {
+        target_directory: {
+          type: 'string',
+          description: 'Absolute or relative path of the workspace directory to scan (defaults to current working directory).',
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            targetDirectory: { type: 'string' },
+            detectedWorkloadType: { type: 'string' },
+            detectedSourceTech: { type: 'string' },
+            totalFilesScanned: { type: 'number' },
+            markersCount: { type: 'number' },
+            recommendedRecipes: { type: 'array', items: { type: 'string' } },
+            recommendedSkills: { type: 'array', items: { type: 'string' } },
+            hasSampleIngress: { type: 'boolean' },
+          },
+        },
+        render: (_args, value) => [{
+          type: 'text',
+          text: `### Workspace Scan: ${value.detectedSourceTech ?? 'Unknown'} (${value.detectedWorkloadType ?? ''})\n` +
+            `- **Directory:** \`${value.targetDirectory ?? ''}\`\n` +
+            `- **Files Scanned:** ${value.totalFilesScanned ?? 0} (${value.markersCount ?? 0} markers detected)\n` +
+            `- **Recommended Recipes:** ${value.recommendedRecipes?.join(', ') || 'None'}\n` +
+            `- **Recommended Skills:** ${value.recommendedSkills?.join(', ') || 'None'}\n` +
+            `- **Ingress Manifest:** ${value.hasSampleIngress ? 'Discovered ✓' : 'Synthetic Fallback Provided'}`,
+        }],
+      },
+      async execute(args) {
+        const res = scanWorkspaceDirectory(args.target_directory)
+        return {
+          targetDirectory: res.targetDirectory,
+          detectedWorkloadType: res.detectedWorkloadType,
+          detectedSourceTech: res.detectedSourceTech,
+          totalFilesScanned: res.totalFilesScanned,
+          markersCount: res.markers.length,
+          recommendedRecipes: [...res.recommendedRecipes],
+          recommendedSkills: [...res.recommendedSkills],
+          hasSampleIngress: Boolean(res.sampleIngressYaml),
+        }
+      },
+    }),
+  )
 }
 
 function registerMmbHttpRoutes(webServer: WebServer): () => void {
@@ -603,6 +660,46 @@ function registerMmbHttpRoutes(webServer: WebServer): () => void {
           }
         })
         return
+      }
+
+      // Route 6: GET & POST /api/mmb/scan-workspace
+      if (pathname === '/api/mmb/scan-workspace') {
+        if (req.method === 'GET') {
+          const dir = url.searchParams.get('dir') || undefined
+          try {
+            const result = scanWorkspaceDirectory(dir)
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify(result))
+          } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'Failed to scan workspace directory', details: String(err) }))
+          }
+          return
+        }
+
+        if (req.method === 'POST') {
+          let body = ''
+          req.on('data', (chunk: unknown) => { body += String(chunk) })
+          req.on('end', () => {
+            try {
+              const data = JSON.parse(body || '{}')
+              const dir = data.targetDirectory || data.dir || undefined
+              const result = scanWorkspaceDirectory(dir)
+              res.writeHead(200, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify(result))
+            } catch (_err) {
+              res.writeHead(400, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: 'Invalid JSON payload' }))
+            }
+          })
+          req.on('error', () => {
+            if (!res.headersSent) {
+              res.writeHead(400, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: 'Request stream error' }))
+            }
+          })
+          return
+        }
       }
 
       res.writeHead(404, { 'Content-Type': 'application/json' })

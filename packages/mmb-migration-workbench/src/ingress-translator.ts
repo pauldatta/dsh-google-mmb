@@ -2,6 +2,8 @@
  * Ingress to Gateway API Translator.
  * Translates networking.k8s.io/v1 Ingress manifests into modern GKE
  * gateway.networking.k8s.io/v1 Gateway and HTTPRoute manifests.
+ * Supports single-document manifests and multi-document YAML streams (---).
+ *
  * @module @deepseek-ai/dsh-mmb-migration-workbench/ingress-translator
  */
 
@@ -33,31 +35,64 @@ interface ParsedIngress {
   tls: ParsedTls[]
 }
 
+function splitYamlDocuments(manifest: string): string[] {
+  const rawDocs = manifest.split(/^(?:---|---[\t ].*)$/m)
+  const validDocs = rawDocs
+    .map(d => d.trim())
+    .filter(d => d.length > 0 && !d.split('\n').every(l => l.trim().startsWith('#') || !l.trim()))
+  return validDocs.length > 0 ? validDocs : [manifest]
+}
+
 /**
  * Lightweight deterministic YAML-to-Ingress parser and Gateway API generator.
+ * Supports single Ingress manifests as well as multi-document YAML streams (---).
  */
 export function translateIngressToGatewayApi(request: IngressTranslateRequest): IngressTranslateResult {
-  const parsed = parseIngressYaml(request.manifest)
-  const routeNamespace = parsed.namespace || 'default'
-  const isCrossNamespace = Boolean(request.gatewayNamespace && request.gatewayNamespace !== routeNamespace)
-  const gatewayNamespace = request.gatewayNamespace ?? routeNamespace
-  const gatewayName = request.gatewayName ?? `${parsed.name}-gateway`
+  const rawDocs = splitYamlDocuments(request.manifest)
+  let ingressDocs = rawDocs.filter(d => {
+    if (d.includes('kind:')) {
+      return d.includes('kind: Ingress')
+    }
+    return true
+  })
+  if (ingressDocs.length === 0) {
+    ingressDocs = rawDocs
+  }
 
-  // Determine GatewayClass based on ingress class or annotations
+  const parsedList: ParsedIngress[] = ingressDocs.map(doc => parseIngressYaml(doc))
+  const primaryParsed = parsedList[0] ?? {
+    name: 'migrated-ingress',
+    namespace: 'default',
+    annotations: {},
+    rules: [],
+    tls: [],
+  }
+
+  const isMultiDoc = parsedList.length > 1
+  const gatewayName = request.gatewayName ?? (isMultiDoc ? 'cluster-gateway' : `${primaryParsed.name}-gateway`)
+  const gatewayNamespace = request.gatewayNamespace ?? primaryParsed.namespace ?? 'default'
+
+  // Determine GatewayClass based on ingress class or annotations across all ingresses
   let gatewayClass = 'gke-l7-global-external-managed'
-  const isInternal = parsed.annotations['kubernetes.io/ingress.class'] === 'gke-internal'
+  const isAnyInternal = parsedList.some(parsed =>
+    parsed.annotations['kubernetes.io/ingress.class'] === 'gke-internal'
     || parsed.ingressClassName === 'gke-internal'
-    || parsed.annotations['networking.gke.io/v1.Ingress/load-balancer-type'] === 'Internal'
-  if (isInternal) {
+    || parsed.annotations['networking.gke.io/v1.Ingress/load-balancer-type'] === 'Internal',
+  )
+  if (isAnyInternal) {
     gatewayClass = 'gke-l7-rilb'
   }
 
-  // Generate Gateway YAML
-  const listeners: string[] = []
-  const tlsHosts: string[] = []
+  // Cross-namespace check
+  const crossNamespaceIngresses = parsedList.filter(p => (p.namespace || 'default') !== gatewayNamespace)
+  const isCrossNamespace = crossNamespaceIngresses.length > 0
   const fromNamespace = isCrossNamespace ? 'All' : 'Same'
 
-  // Default HTTP listener
+  // Aggregate listeners
+  const listeners: string[] = []
+  const tlsHosts: Set<string> = new Set()
+  const seenListenerNames: Set<string> = new Set()
+
   listeners.push(`    - name: http
       protocol: HTTP
       port: 80
@@ -65,14 +100,16 @@ export function translateIngressToGatewayApi(request: IngressTranslateRequest): 
         namespaces:
           from: ${fromNamespace}`)
 
-  // TLS listeners if present
-  for (let i = 0; i < parsed.tls.length; i++) {
-    const tls = parsed.tls[i]
-    if (!tls) continue
-    for (const host of tls.hosts) {
-      tlsHosts.push(host)
-      const listenerName = `https-${host.replace(/[^a-z0-9-]/gi, '-').toLowerCase()}`
-      listeners.push(`    - name: ${listenerName}
+  for (const parsed of parsedList) {
+    for (const tls of parsed.tls) {
+      if (!tls) continue
+      for (const host of tls.hosts) {
+        tlsHosts.add(host)
+        const listenerName = `https-${host.replace(/[^a-z0-9-]/gi, '-').toLowerCase()}`
+        if (seenListenerNames.has(listenerName)) continue
+        seenListenerNames.add(listenerName)
+
+        listeners.push(`    - name: ${listenerName}
       protocol: HTTPS
       port: 443
       hostname: ${host}
@@ -85,6 +122,7 @@ export function translateIngressToGatewayApi(request: IngressTranslateRequest): 
       allowedRoutes:
         namespaces:
           from: ${fromNamespace}`)
+      }
     }
   }
 
@@ -100,19 +138,27 @@ spec:
   listeners:
 ${listeners.join('\n')}`
 
-  // Generate HTTPRoute YAML
-  const httpRouteRules: string[] = []
-  const backendServices: Set<string> = new Set()
-  let routesCount = 0
+  // Generate HTTPRoutes for each parsed ingress
+  const httpRouteYamls: string[] = []
+  const allBackendServices: Set<string> = new Set()
+  const allAnnotations: Set<string> = new Set()
+  let totalRoutesCount = 0
 
-  for (const rule of parsed.rules) {
-    const ruleBlocks: string[] = []
+  for (const parsed of parsedList) {
+    for (const k of Object.keys(parsed.annotations)) {
+      allAnnotations.add(k)
+    }
 
-    for (const p of rule.paths) {
-      routesCount++
-      backendServices.add(p.serviceName)
-      const matchType = p.pathType === 'Exact' ? 'Exact' : 'PathPrefix'
-      ruleBlocks.push(`    - matches:
+    const routeNamespace = parsed.namespace || 'default'
+    const httpRouteRules: string[] = []
+
+    for (const rule of parsed.rules) {
+      const ruleBlocks: string[] = []
+      for (const p of rule.paths) {
+        totalRoutesCount++
+        allBackendServices.add(p.serviceName)
+        const matchType = p.pathType === 'Exact' ? 'Exact' : 'PathPrefix'
+        ruleBlocks.push(`    - matches:
         - path:
             type: ${matchType}
             value: "${p.path}"
@@ -120,22 +166,22 @@ ${listeners.join('\n')}`
         - name: ${p.serviceName}
           port: ${p.servicePort}
           weight: 1`)
+      }
+
+      if (ruleBlocks.length > 0) {
+        httpRouteRules.push(ruleBlocks.join('\n'))
+      }
     }
 
-    if (ruleBlocks.length > 0) {
-      httpRouteRules.push(ruleBlocks.join('\n'))
-    }
-  }
+    const uniqueHosts = Array.from(
+      new Set(parsed.rules.map(r => r.host).filter((h): h is string => Boolean(h && h.trim()))),
+    )
 
-  const uniqueHosts = Array.from(
-    new Set(parsed.rules.map(r => r.host).filter((h): h is string => Boolean(h && h.trim()))),
-  )
+    const hostnamesBlock = uniqueHosts.length > 0
+      ? `  hostnames:\n${uniqueHosts.map(h => `    - "${h}"`).join('\n')}\n`
+      : ''
 
-  const hostnamesBlock = uniqueHosts.length > 0
-    ? `  hostnames:\n${uniqueHosts.map(h => `    - "${h}"`).join('\n')}\n`
-    : ''
-
-  const httpRouteYaml = `apiVersion: gateway.networking.k8s.io/v1
+    const singleRouteYaml = `apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: ${parsed.name}-route
@@ -148,13 +194,25 @@ spec:
       namespace: ${gatewayNamespace}
 ${hostnamesBlock}${httpRouteRules.length > 0 ? `  rules:\n${httpRouteRules.join('\n')}` : '  rules: []'}`
 
-  let referenceGrantYaml: string | undefined
-  if (isCrossNamespace) {
-    referenceGrantYaml = `apiVersion: gateway.networking.k8s.io/v1beta1
+    httpRouteYamls.push(singleRouteYaml)
+  }
+
+  const httpRouteYaml = httpRouteYamls.join('\n---\n')
+
+  // Generate ReferenceGrants for each distinct remote namespace
+  const referenceGrantYamls: string[] = []
+  const grantedNamespaces = new Set<string>()
+
+  for (const parsed of crossNamespaceIngresses) {
+    const ns = parsed.namespace || 'default'
+    if (grantedNamespaces.has(ns)) continue
+    grantedNamespaces.add(ns)
+
+    referenceGrantYamls.push(`apiVersion: gateway.networking.k8s.io/v1beta1
 kind: ReferenceGrant
 metadata:
   name: ${gatewayName}-grant
-  namespace: ${routeNamespace}
+  namespace: ${ns}
   labels:
     app.kubernetes.io/managed-by: dsh-mmb-migration-workbench
 spec:
@@ -164,13 +222,19 @@ spec:
       namespace: ${gatewayNamespace}
   to:
     - group: ""
-      kind: Service`
+      kind: Service`)
   }
+
+  const referenceGrantYaml = referenceGrantYamls.length > 0 ? referenceGrantYamls.join('\n---\n') : undefined
+
+  const sourceNameDesc = isMultiDoc
+    ? `${parsedList.length} Ingresses (${parsedList.map(p => p.name).join(', ')})`
+    : `${primaryParsed.name} (Namespace: ${primaryParsed.namespace || 'default'})`
 
   const combinedYamlParts = [
     '# ══════════════════════════════════════════════════════════════════════════════',
     '# GKE Gateway API Generated by MMB Migration Workbench',
-    `# Source Ingress: ${parsed.name} (Namespace: ${routeNamespace})`,
+    `# Source Ingress: ${sourceNameDesc}`,
     `# Target Gateway: ${gatewayName} (Namespace: ${gatewayNamespace})`,
     `# Target GatewayClass: ${gatewayClass}`,
     '# ══════════════════════════════════════════════════════════════════════════════',
@@ -192,10 +256,10 @@ spec:
     referenceGrantYaml,
     combinedYaml,
     summary: {
-      routesConverted: routesCount,
-      tlsHosts,
-      backendServices: Array.from(backendServices),
-      annotationsHandled: Object.keys(parsed.annotations),
+      routesConverted: totalRoutesCount,
+      tlsHosts: Array.from(tlsHosts),
+      backendServices: Array.from(allBackendServices),
+      annotationsHandled: Array.from(allAnnotations),
       crossNamespaceGrantGenerated: isCrossNamespace,
     },
   }
@@ -325,7 +389,6 @@ function parseIngressYaml(yaml: string): ParsedIngress {
             const splitHosts = inlineMatch[1].split(',').map(h => h.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
             currentTls.hosts.push(...splitHosts)
           }
-
         } else if (currentTls && trimmed.startsWith('-') && !trimmed.startsWith('- hosts:')) {
           const host = trimmed.slice(1).trim().replace(/^['"]|['"]$/g, '')
           if (host && !trimmed.startsWith('- secretName:')) {

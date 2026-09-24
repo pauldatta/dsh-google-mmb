@@ -1,6 +1,14 @@
+/**
+ * Inline Tool Call View for MMB Migration Workbench.
+ * Rendered inline within chat conversation turns for MMB tools.
+ *
+ * @module @deepseek-ai/dsh-mmb-migration-workbench/client/MigrationToolView
+ */
+
 import type { ReactElement } from 'react'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
+import type { CloudSource, WorkloadType } from '../types.ts'
 import { MigrationCenterIcon } from './MigrationCenterIcon.tsx'
 import { workbenchStore } from './workbench-state.ts'
 
@@ -36,6 +44,31 @@ export function MigrationToolView({
     title = `MMB Migration Plan: ${String(args.source_technology ?? '')} -> ${String(args.target_gcp_service ?? '')}`
     targetTab = 'assessment'
     previewText = 'Phased Roadmap'
+  } else if (toolName === 'mmb_scan_workspace') {
+    title = 'MMB Live Workspace Scan'
+    targetTab = 'assessment'
+    previewText = 'Automated Discovery'
+  }
+
+  const handleOpenWorkbench = (): void => {
+    if (toolName === 'mmb_assess_workload') {
+      workbenchStore.openWithAssessment({
+        workloadType: args.workload_type as WorkloadType | undefined,
+        sourcePlatform: args.source_platform as CloudSource | undefined,
+        sourceTechnology: args.source_technology ? String(args.source_technology) : undefined,
+      })
+    } else if (toolName === 'mmb_ingress_translate' && args.manifest) {
+      workbenchStore.openWithIngress(String(args.manifest))
+    } else if (toolName === 'mmb_catalog' && args.query) {
+      workbenchStore.openWithSearch(String(args.query))
+    } else if (toolName === 'mmb_generate_migration_plan') {
+      workbenchStore.openWithAssessment({
+        workloadType: args.workload_type as WorkloadType | undefined,
+        sourceTechnology: args.source_technology ? String(args.source_technology) : undefined,
+      })
+    } else {
+      workbenchStore.setActiveTab(targetTab)
+    }
   }
 
   return (
@@ -58,7 +91,7 @@ export function MigrationToolView({
         <div style={{ display: 'flex', gap: '6px' }}>
           <button
             type="button"
-            onClick={() => { workbenchStore.setActiveTab(targetTab) }}
+            onClick={handleOpenWorkbench}
             style={{
               background: '#4285F4',
               border: 'none',

@@ -16,7 +16,7 @@ import { MigrationCenterSidebarAction } from './MigrationCenterSidebarAction.tsx
 import { MigrationCenterWorkbench } from './MigrationCenterWorkbench.tsx'
 import { MigrationToolView } from './MigrationToolView.tsx'
 
-export { workbenchStore } from './workbench-state.ts'
+export { workbenchStore, sendPromptToHarnessComposer, showNotificationToast } from './workbench-state.ts'
 export { MigrationCenterSidebarAction } from './MigrationCenterSidebarAction.tsx'
 export { MigrationCenterWorkbench } from './MigrationCenterWorkbench.tsx'
 export { MigrationToolView } from './MigrationToolView.tsx'
@@ -61,6 +61,11 @@ export function apply(ctx: ClientContext): void {
     yield ctx.slots.register({
       name: 'tool.call.toolview',
       key: 'mmb_generate_migration_plan',
+      locale: NS,
+    }, MigrationToolView)
+    yield ctx.slots.register({
+      name: 'tool.call.toolview',
+      key: 'mmb_scan_workspace',
       locale: NS,
     }, MigrationToolView)
   })

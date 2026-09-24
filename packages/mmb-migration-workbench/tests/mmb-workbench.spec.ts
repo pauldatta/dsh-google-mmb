@@ -10,6 +10,7 @@ import {
   MODERNIZATION_RECIPES,
   runModernizationRecipe,
   MMB_RUNTIME_SKILLS,
+  scanWorkspaceDirectory,
   name,
   inject,
 } from '../src/index.ts'
@@ -152,8 +153,49 @@ describe('MMB Migration Workbench', () => {
       expect(result.riskFactors.some(r => r.includes('Enterprise scale'))).toBe(true)
       expect(result.actionPlan.some(a => a.includes('Enterprise Resilience'))).toBe(true)
     })
-  })
 
+    it('generates 4-wave plan, effort estimate, TCO model, and comprehensive markdown report', () => {
+      const result = assessWorkload({
+        workloadType: 'database',
+        sourcePlatform: 'aws',
+        sourceTechnology: 'Oracle 19c RAC',
+        workloadScale: 'enterprise',
+      })
+
+      // Wave Plan
+      expect(result.wavePlan).toHaveLength(4)
+      expect(result.wavePlan[0].wave).toBe('Wave 0: Discovery & Landing Zone')
+      expect(result.wavePlan[1].wave).toBe('Wave 1: Pilot & Dual-Run')
+      expect(result.wavePlan[2].wave).toBe('Wave 2: Core Migration & Modernization')
+      expect(result.wavePlan[3].wave).toBe('Wave 3: Production Cutover & Decommission')
+      for (const wave of result.wavePlan) {
+        expect(wave.durationWeeks).toBeGreaterThan(0)
+        expect(wave.deliverables.length).toBeGreaterThan(0)
+        expect(wave.exitCriteria.length).toBeGreaterThan(10)
+      }
+
+      // Effort Estimate
+      expect(result.effortEstimate.baselinePersonWeeks).toBe(52)
+      expect(result.effortEstimate.aiAcceleratedPersonWeeks).toBeLessThan(52)
+      expect(result.effortEstimate.savingsPercent).toBeGreaterThan(40)
+      expect(result.effortEstimate.breakdown.discoveryWeeks).toBeGreaterThan(0)
+      expect(result.effortEstimate.breakdown.engineeringWeeks).toBeGreaterThan(0)
+      expect(result.effortEstimate.breakdown.testingCutoverWeeks).toBeGreaterThan(0)
+
+      // TCO Model
+      expect(result.tcoModel.estimatedAnnualSavingsPercent).toBe(42)
+      expect(result.tcoModel.licenseOptimization).toContain('BigQuery')
+      expect(result.tcoModel.opsEfficiencyGain).toContain('DBA')
+      expect(result.tcoModel.riskMitigationSummary.length).toBeGreaterThan(20)
+
+      // Markdown Report
+      expect(result.markdownReport).toContain('# Executive Migration & Modernization Assessment')
+      expect(result.markdownReport).toContain('Oracle 19c RAC')
+      expect(result.markdownReport).toContain('4-Wave Phased Migration Plan')
+      expect(result.markdownReport).toContain('Effort Modeling & AI Acceleration Impact')
+      expect(result.markdownReport).toContain('TCO & Financial Optimization')
+    })
+  })
 
   describe('Ingress to Gateway API AST Translator', () => {
     const sampleIngress = `apiVersion: networking.k8s.io/v1
@@ -296,6 +338,92 @@ spec:
       expect(result.gatewayYaml).toContain('name: twospace-secret')
     })
 
+    it('translates multi-document YAML stream (---) with multiple Ingresses into aggregated Gateway and HTTPRoutes', () => {
+      const multiDocManifest = `apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-ingress
+  namespace: app-ns
+spec:
+  tls:
+    - hosts:
+        - web.example.com
+      secretName: web-tls
+  rules:
+    - host: web.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-svc
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-ingress
+  namespace: app-ns
+spec:
+  tls:
+    - hosts:
+        - api.example.com
+      secretName: api-tls
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: api-svc
+                port:
+                  number: 8080`
+
+      const result = translateIngressToGatewayApi({ manifest: multiDocManifest })
+      expect(result.summary.routesConverted).toBe(2)
+      expect(result.summary.backendServices).toContain('web-svc')
+      expect(result.summary.backendServices).toContain('api-svc')
+      expect(result.summary.tlsHosts).toContain('web.example.com')
+      expect(result.summary.tlsHosts).toContain('api.example.com')
+
+      // Gateway contains both TLS listeners
+      expect(result.gatewayYaml).toContain('name: https-web-example-com')
+      expect(result.gatewayYaml).toContain('name: https-api-example-com')
+
+      // HTTPRoute output contains both routes separated by ---
+      expect(result.httpRouteYaml).toContain('name: frontend-ingress-route')
+      expect(result.httpRouteYaml).toContain('name: api-ingress-route')
+      expect(result.httpRouteYaml).toContain('---')
+
+      // Combined YAML has gateway, both routes
+      expect(result.combinedYaml).toContain('kind: Gateway')
+      expect(result.combinedYaml).toContain('name: frontend-ingress-route')
+      expect(result.combinedYaml).toContain('name: api-ingress-route')
+    })
+  })
+
+  describe('Workspace Scanner', () => {
+    it('scans local workspace directory and identifies project markers and workload type', () => {
+      const result = scanWorkspaceDirectory(process.cwd())
+      expect(result).toBeDefined()
+      expect(result.totalFilesScanned).toBeGreaterThan(0)
+      expect(result.markers.length).toBeGreaterThan(0)
+      expect(result.detectedSourceTech).toBeDefined()
+      expect(result.sampleIngressYaml).toBeDefined()
+      expect(result.recommendedRecipes.length).toBeGreaterThan(0)
+      expect(result.recommendedSkills.length).toBeGreaterThan(0)
+    })
+
+    it('provides fallback synthetic Ingress when scanning non-existent or empty folder', () => {
+      const result = scanWorkspaceDirectory('/tmp/non-existent-mmb-path-' + Date.now())
+      expect(result.totalFilesScanned).toBe(0)
+      expect(result.sampleIngressYaml).toBeDefined()
+      expect(result.sampleIngressYaml?.content).toContain('kind: Ingress')
+    })
   })
 
   describe('Modernization Recipes', () => {
@@ -372,6 +500,7 @@ spec:
       expect(registeredTools).toHaveProperty('mmb_ingress_translate')
       expect(registeredTools).toHaveProperty('mmb_generate_migration_plan')
       expect(registeredTools).toHaveProperty('mmb_recipe_run')
+      expect(registeredTools).toHaveProperty('mmb_scan_workspace')
 
       expect(registeredSkills).toHaveLength(6)
       expect(registeredSkills).toContain('mmb-oracle-bigquery')
@@ -385,7 +514,7 @@ spec:
 
       // Execute mmb_assess_workload tool
       const assessTool = registeredTools.mmb_assess_workload as {
-        execute: (args: Record<string, unknown>) => Promise<{ calibratedScore: number; recommendedTarget: string }>
+        execute: (args: Record<string, unknown>) => Promise<{ calibratedScore: number; recommendedTarget: string; markdownReport?: string }>
       }
       const assessRes = await assessTool.execute({
         workload_type: 'database',
@@ -394,6 +523,7 @@ spec:
       })
       expect(assessRes.calibratedScore).toBeGreaterThanOrEqual(3.5)
       expect(assessRes.recommendedTarget).toContain('BigQuery')
+      expect(assessRes.markdownReport).toContain('# Executive Migration & Modernization Assessment')
 
       // Execute mmb_recipe_run tool
       const recipeTool = registeredTools.mmb_recipe_run as {
@@ -401,6 +531,13 @@ spec:
       }
       const recipeRes = await recipeTool.execute({ recipe_id: 'java-spring-boot-3', dry_run: true })
       expect(recipeRes.status).toBe('dry-run')
+
+      // Execute mmb_scan_workspace tool
+      const scanTool = registeredTools.mmb_scan_workspace as {
+        execute: (args: Record<string, unknown>) => Promise<{ totalFilesScanned: number; detectedWorkloadType: string }>
+      }
+      const scanRes = await scanTool.execute({})
+      expect(scanRes.totalFilesScanned).toBeGreaterThan(0)
     })
   })
 
@@ -450,7 +587,6 @@ spec:
       expect(stats.topTierCount).toBe(4)
       expect(stats.averageScore).toBe(Number((MMB_ASSETS.reduce((sum, a) => sum + a.score, 0) / MMB_ASSETS.length).toFixed(2)))
       expect(stats.peakScore).toBe(Math.max(...MMB_ASSETS.map(a => a.score)))
-
 
       // Mock req & res for GET /api/mmb/projects?domain=migrate
       let projData = ''
@@ -508,6 +644,35 @@ spec:
       expect(statusCode).toBe(200)
       const translateParsed = JSON.parse(translateData)
       expect(translateParsed.gatewayYaml).toContain('kind: Gateway')
+
+      // GET /api/mmb/scan-workspace
+      let scanGetData = ''
+      await registeredRoute?.handler(
+        { method: 'GET', url: '/api/mmb/scan-workspace' },
+        { setHeader: () => {}, writeHead: (code: number) => { statusCode = code }, end: (d: string) => { scanGetData = d } },
+      )
+      expect(statusCode).toBe(200)
+      const scanGetParsed = JSON.parse(scanGetData)
+      expect(scanGetParsed.totalFilesScanned).toBeGreaterThan(0)
+      expect(scanGetParsed.detectedSourceTech).toBeDefined()
+
+      // POST /api/mmb/scan-workspace
+      let scanPostData = ''
+      const scanPostReq = {
+        method: 'POST',
+        url: '/api/mmb/scan-workspace',
+        on: (event: string, cb: (arg?: unknown) => void) => {
+          if (event === 'data') cb(JSON.stringify({ targetDirectory: '.' }))
+          if (event === 'end') cb()
+        },
+      }
+      await registeredRoute?.handler(
+        scanPostReq,
+        { setHeader: () => {}, writeHead: (code: number) => { statusCode = code }, end: (d: string) => { scanPostData = d } },
+      )
+      expect(statusCode).toBe(200)
+      const scanPostParsed = JSON.parse(scanPostData)
+      expect(scanPostParsed.totalFilesScanned).toBeGreaterThan(0)
 
       // Test OPTIONS CORS preflight
       await registeredRoute?.handler(
