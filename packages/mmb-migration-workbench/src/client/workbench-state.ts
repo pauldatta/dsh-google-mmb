@@ -8,12 +8,12 @@
 
 import type { WorkloadAssessmentRequest } from '../types.ts'
 
-export type WorkbenchTab = 'portfolio' | 'assessment' | 'ingress' | 'skills' | 'recipes'
+export type WorkbenchTab = 'portfolio' | 'assessment' | 'recipes' | 'skills'
 
 export interface WorkbenchState {
   readonly isOpen: boolean
   readonly activeTab: WorkbenchTab
-  readonly filterDomain?: 'all' | 'migrate' | 'modernize' | 'build' | 'top-tier'
+  readonly filterDomain?: 'all' | 'database' | 'app' | 'data' | 'cloud' | 'all-legacy'
   readonly searchQuery: string
   readonly selectedAssetId?: string
   readonly assessmentPreload?: Partial<WorkloadAssessmentRequest> | undefined
@@ -63,7 +63,7 @@ export const workbenchStore = {
     notify()
   },
 
-  setFilterDomain(filterDomain: 'all' | 'migrate' | 'modernize' | 'build' | 'top-tier'): void {
+  setFilterDomain(filterDomain: 'all' | 'database' | 'app' | 'data' | 'cloud' | 'all-legacy'): void {
     currentState = { ...currentState, filterDomain }
     notify()
   },
@@ -91,7 +91,7 @@ export const workbenchStore = {
   openWithIngress(yaml: string): void {
     currentState = {
       ...currentState,
-      activeTab: 'ingress',
+      activeTab: 'recipes',
       isOpen: true,
       ingressPreload: yaml,
     }

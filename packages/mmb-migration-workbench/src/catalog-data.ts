@@ -704,3 +704,243 @@ export const MMB_ASSETS: readonly MmbAsset[] = [
     status: 'archived',
   },
 ]
+
+export const MMB_ASSETS_CATALOG = MMB_ASSETS
+
+export interface CuratedBlueprint {
+  readonly id: string
+  readonly title: string
+  readonly domain: 'database' | 'app' | 'data' | 'cloud'
+  readonly domainLabel: string
+  readonly score: number
+  readonly sourceStack: readonly string[]
+  readonly targetStack: readonly string[]
+  readonly description: string
+  readonly deliverables: readonly string[]
+  readonly recommendedSkills: readonly string[]
+  readonly recommendedRecipes: readonly string[]
+}
+
+/**
+ * 12 Curated Production-Grade Enterprise Blueprints.
+ * High-maturity, production-ready blueprints scored >= 4.2 / 5.0 with concrete
+ * deliverables across Database, App Modernization, Data & Lakehouse, and Cloud Replatform.
+ */
+export const CURATED_PRACTITIONER_BLUEPRINTS: readonly CuratedBlueprint[] = [
+  {
+    id: 'oracle-alloydb-bigquery-zero-etl',
+    title: 'Oracle to AlloyDB & BigQuery Zero-ETL Blueprint',
+    domain: 'database',
+    domainLabel: 'Database Migration',
+    score: 4.8,
+    sourceStack: ['Oracle 11g/12c/19c', 'PL/SQL', 'RAC / Exadata'],
+    targetStack: ['AlloyDB for PostgreSQL', 'BigQuery', 'Datastream CDC', 'BigQuery ML'],
+    description: 'Enterprise zero-downtime replication from legacy Oracle databases to BigQuery for real-time analytics and AlloyDB for sub-millisecond OLTP transactions.',
+    deliverables: [
+      'Datastream Private Connection & VPC Peering Terraform',
+      'Automated PL/SQL to ANSI BigQuery SQL Converter',
+      'Continuous CDC Merge Deduplication Pipeline',
+      'Cryptographic Checksum & Row-Count Validation Suite',
+    ],
+    recommendedSkills: ['mmb-database-migration'],
+    recommendedRecipes: ['oracle-plsql-to-bigquery'],
+  },
+  {
+    id: 'java-spring-boot-cloud-run',
+    title: 'Java 8/11 & Spring Boot 2 to Java 21 + Cloud Run/GKE',
+    domain: 'app',
+    domainLabel: 'App Modernization',
+    score: 4.6,
+    sourceStack: ['Java 8 / Java 11', 'Spring Boot 2.x', 'javax.*', 'Tomcat / WebLogic'],
+    targetStack: ['Java 21 LTS', 'Spring Boot 3.3', 'Cloud Run', 'Artifact Registry', 'Jib Distroless'],
+    description: 'Automated OpenRewrite AST refactoring from Java 8/11 and Spring Boot 2.x to Java 21 LTS and Spring Boot 3.3, packaged into secure distroless containers on Cloud Run.',
+    deliverables: [
+      'OpenRewrite Spring Boot 3 AST Transformation Spec',
+      'Google Jib Non-Root Distroless Container Blueprint',
+      'Cloud Run Multi-Region Auto-Scaling Terraform',
+      'Automated Hermetic Maven Regression Test Suite',
+    ],
+    recommendedSkills: ['mmb-app-modernization'],
+    recommendedRecipes: ['java-spring-boot-3', 'java-cloud-run-containerization'],
+  },
+  {
+    id: 'dotnet-framework-to-dotnet8-linux',
+    title: 'Legacy .NET Framework to .NET 8 Linux Containers',
+    domain: 'app',
+    domainLabel: 'App Modernization',
+    score: 4.5,
+    sourceStack: ['.NET Framework 4.7/4.8', 'Windows IIS', 'ASP.NET MVC', 'WCF'],
+    targetStack: ['.NET 8 LTS Linux', 'Cloud Run / GKE', 'Cloud SQL Auth Proxy', 'Secret Manager'],
+    description: 'De-couple legacy Windows Server IIS dependencies, refactoring .NET Framework monoliths into lightweight ASP.NET Core 8 minimal APIs running on Linux containers.',
+    deliverables: [
+      'C# ASP.NET Core 8 Minimal API Refactoring Plan',
+      'Multi-Stage Debian Distroless Linux Dockerfile',
+      'Cloud SQL Auth Proxy & Secret Manager Integration',
+      'Hermetic dotnet test Verification Suite',
+    ],
+    recommendedSkills: ['mmb-app-modernization'],
+    recommendedRecipes: ['dotnet-core-cloud-run'],
+  },
+  {
+    id: 'hadoop-spark-to-dataproc-biglake',
+    title: 'Hadoop/Hive/Spark to Dataproc Serverless & BigLake Iceberg',
+    domain: 'data',
+    domainLabel: 'Data & Lakehouse',
+    score: 4.7,
+    sourceStack: ['Cloudera / Hortonworks', 'HDFS', 'Apache Spark 2.x', 'Hive Metastore'],
+    targetStack: ['Dataproc Serverless', 'BigLake (Apache Iceberg)', 'Cloud Storage', 'Dataplex'],
+    description: 'Retire expensive on-premises HDFS clusters by moving analytical data to Cloud Storage with open Apache Iceberg tables and autoscaling Dataproc Serverless batches.',
+    deliverables: [
+      'Cloud Storage Transfer Service Automated Ingestion',
+      'Apache Iceberg BigLake Catalog DDL Generator',
+      'PySpark Serverless Batches Execution Wrappers',
+      'Spark SQL vs BigQuery SQL AST Dialect Validator',
+    ],
+    recommendedSkills: ['mmb-lakehouse-modernization'],
+    recommendedRecipes: ['pyspark-to-dataproc-serverless'],
+  },
+  {
+    id: 'aws-to-gcp-landing-zone',
+    title: 'AWS EKS/RDS/S3 to GKE/AlloyDB/GCS Landing Zone',
+    domain: 'cloud',
+    domainLabel: 'Cloud Replatform',
+    score: 4.5,
+    sourceStack: ['AWS EKS', 'Amazon RDS (Postgres/MySQL)', 'Amazon S3', 'boto3 / IAM'],
+    targetStack: ['GKE Enterprise', 'AlloyDB / Cloud SQL', 'Cloud Storage', 'Workload Identity'],
+    description: 'Cross-cloud migration blueprint that converts AWS infrastructure and applications to Google Cloud equivalents with zero-downtime database replication.',
+    deliverables: [
+      'Terraform AWS-to-GCP Infrastructure Module Map',
+      'boto3 to google-cloud-storage Python AST Patch',
+      'Database Migration Service (DMS) Replication Spec',
+      'Dual-Cloud DNS Weighted Canary Cutover Guide',
+    ],
+    recommendedSkills: ['mmb-cloud-replatform'],
+    recommendedRecipes: ['aws-to-gcp-refactor'],
+  },
+  {
+    id: 'mainframe-monolith-strangler',
+    title: 'Mainframe & Monolith Domain Extraction (Strangler Fig)',
+    domain: 'app',
+    domainLabel: 'App Modernization',
+    score: 4.4,
+    sourceStack: ['COBOL / CICS', 'DB2 / IMS', 'On-Prem Monolith'],
+    targetStack: ['Cloud Run Microservices', 'Pub/Sub Event Streaming', 'AlloyDB', 'Cloud Endpoints'],
+    description: 'Incremental strangler-fig pattern for decomposing legacy core banking and ERP monoliths into decoupled event-driven microservices on Cloud Run and Pub/Sub.',
+    deliverables: [
+      'Domain Boundary Context Map & Event Storming Spec',
+      'Pub/Sub Change Stream Ingestion Connector',
+      'Dual-Write Microservice Scaffold with Fallback',
+      'Canary API Gateway Reverse Proxy Routing Rules',
+    ],
+    recommendedSkills: ['mmb-app-modernization', 'mmb-discovery-wave-planner'],
+    recommendedRecipes: ['java-spring-boot-3'],
+  },
+  {
+    id: 'sql-server-to-cloud-sql-alloydb',
+    title: 'SQL Server to Cloud SQL & AlloyDB Continuous DMS',
+    domain: 'database',
+    domainLabel: 'Database Migration',
+    score: 4.6,
+    sourceStack: ['Microsoft SQL Server 2012-2019', 'T-SQL', 'SSIS Packages'],
+    targetStack: ['Cloud SQL for SQL Server', 'AlloyDB for PostgreSQL', 'Database Migration Service (DMS)'],
+    description: 'Continuous logical replication and schema conversion from legacy SQL Server instances to managed Cloud SQL or open-source compatible AlloyDB.',
+    deliverables: [
+      'DMS Continuous Replication Private Connection Setup',
+      'Schema Conversion Assessment & Automated Fix Scripts',
+      'SSIS ETL to Cloud Data Fusion Pipeline Translation',
+      'High-Availability Multi-Zone Failover Runbook',
+    ],
+    recommendedSkills: ['mmb-database-migration'],
+    recommendedRecipes: ['oracle-plsql-to-bigquery'],
+  },
+  {
+    id: 'postgres-to-alloydb-ai-scann',
+    title: 'PostgreSQL to AlloyDB AI + pgvector RAG Architecture',
+    domain: 'database',
+    domainLabel: 'Database Migration',
+    score: 4.9,
+    sourceStack: ['Self-Managed PostgreSQL 12-16', 'AWS Aurora PG', 'Standard pgvector'],
+    targetStack: ['AlloyDB AI', 'ScaNN Vector Indexing', 'Vertex AI Embeddings', 'BigQuery Federation'],
+    description: 'Transform standard PostgreSQL transactional stores into high-performance GenAI vector engines with Google ScaNN index for 10x faster RAG retrieval.',
+    deliverables: [
+      'AlloyDB pgvector ScaNN Optimization DDL Generator',
+      'Vertex AI Embedding Model In-Database Function Connector',
+      'Zero-Downtime Logical Replication Stream Script',
+      'Sub-Millisecond Vector Search Benchmark Suite',
+    ],
+    recommendedSkills: ['mmb-database-migration'],
+    recommendedRecipes: ['oracle-plsql-to-bigquery'],
+  },
+  {
+    id: 'vmware-to-gcve-gke',
+    title: 'VMware / Nutanix to Google Cloud VMware Engine & GKE',
+    domain: 'cloud',
+    domainLabel: 'Cloud Replatform',
+    score: 4.3,
+    sourceStack: ['VMware vSphere / ESXi', 'Nutanix AHV', 'SAN / NAS Storage'],
+    targetStack: ['Google Cloud VMware Engine (GCVE)', 'Filestore High Scale', 'GKE Private Clusters'],
+    description: 'Rapid data center exit blueprint leveraging VMware HCX live vMotion for zero downtime, followed by systematic containerization into GKE.',
+    deliverables: [
+      'HCX Layer-2 Network Extension & VPN Tunnel Plan',
+      'VMware Live Migration Wave Assessment Matrix',
+      'Filestore High-Scale NFS Mount Automation Scripts',
+      'Post-Migration GKE Containerization Roadmap',
+    ],
+    recommendedSkills: ['mmb-cloud-replatform', 'mmb-discovery-wave-planner'],
+    recommendedRecipes: ['k8s-ingress-to-gateway-api'],
+  },
+  {
+    id: 'teradata-snowflake-to-bigquery',
+    title: 'Enterprise Data Warehouse (Teradata/Snowflake) to BigQuery',
+    domain: 'data',
+    domainLabel: 'Data & Lakehouse',
+    score: 4.8,
+    sourceStack: ['Teradata BTEQ / FastLoad', 'Snowflake SnowSQL', 'Netezza / Exadata'],
+    targetStack: ['BigQuery Enterprise', 'BigQuery Studio', 'Dataplex Data Governance', 'Dataform'],
+    description: 'Complete data warehouse modernization eliminating high recurring licensing costs, replacing proprietary SQL with BigQuery Serverless and automated Dataform CI/CD.',
+    deliverables: [
+      'Automated SQL Translation Compiler Engine',
+      'Dataform CI/CD Pipeline & Lineage Validation',
+      'BTEQ / SnowSQL Shell Scripts to BigQuery CLI Map',
+      'Slot Reservation & Flex Edition FinOps Model',
+    ],
+    recommendedSkills: ['mmb-lakehouse-modernization'],
+    recommendedRecipes: ['pyspark-to-dataproc-serverless'],
+  },
+  {
+    id: 'k8s-nginx-to-gke-gateway-armor',
+    title: 'Kubernetes NGINX/Legacy Ingress to GKE Gateway & Cloud Armor',
+    domain: 'cloud',
+    domainLabel: 'Cloud Replatform',
+    score: 4.7,
+    sourceStack: ['Kubernetes Ingress (NGINX/Traefik)', 'cert-manager', 'Self-Managed ModSecurity'],
+    targetStack: ['GKE Gateway API (GatewayClass gke-l7-global-external-managed)', 'HTTPRoute', 'Google Cloud Armor WAF', 'Managed TLS'],
+    description: 'Modernize legacy ingress controllers to Google Cloud multi-cluster Gateway API with automated edge DDoS protection and declarative Cloud Armor security policies.',
+    deliverables: [
+      'Deterministic Ingress-to-Gateway API AST Converter',
+      'Cloud Armor SecurityPolicy WAF Manifests',
+      'Canary Weighted Traffic Splitting Spec',
+      'Cross-Namespace ReferenceGrant Templates',
+    ],
+    recommendedSkills: ['mmb-cloud-replatform'],
+    recommendedRecipes: ['k8s-ingress-to-gateway-api'],
+  },
+  {
+    id: 'finops-automated-dr-readiness',
+    title: 'Cloud-Native FinOps & Automated DR Readiness',
+    domain: 'cloud',
+    domainLabel: 'Cloud Replatform',
+    score: 4.4,
+    sourceStack: ['Unoptimized Multi-Cloud VMs', 'Manual Disaster Recovery Runbooks'],
+    targetStack: ['Cloud Billing CUD Optimization', 'Multi-Region Cloud Run & AlloyDB Replicas', 'Cloud Monitoring SLOs'],
+    description: 'Establish enterprise cloud governance with automated Committed Use Discount (CUD) recommendations and verified multi-region automated failover architecture.',
+    deliverables: [
+      'Committed Use Discount (CUD) Recommender Script',
+      'Active-Passive Cross-Region Failover Terraform',
+      'Automated Chaos Engineering Verification Runbook',
+      'FinOps Executive KPI Dashboard Config',
+    ],
+    recommendedSkills: ['mmb-discovery-wave-planner', 'mmb-cloud-replatform'],
+    recommendedRecipes: ['aws-to-gcp-refactor'],
+  },
+]

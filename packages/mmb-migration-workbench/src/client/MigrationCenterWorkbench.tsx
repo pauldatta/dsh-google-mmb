@@ -1,7 +1,7 @@
 /**
  * Migration Center Workbench - Full Interactive Modal UI.
- * Provides Workload Assessment, Portfolio Explorer, Ingress-to-Gateway Translator,
- * Mature Skills Library, Modernization Recipes, and Seamless Composer Handoffs.
+ * Provides 4 streamlined practitioner tabs: Curated Blueprints (12),
+ * Workload Assessment & Wave Plan, Modernization Recipes (6), and Practitioner Skills (5).
  *
  * @module @deepseek-ai/dsh-mmb-migration-workbench/client/MigrationCenterWorkbench
  */
@@ -10,12 +10,12 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties, ReactElement } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import { MMB_ASSETS } from '../catalog-data.ts'
+import { CURATED_PRACTITIONER_BLUEPRINTS, type CuratedBlueprint } from '../catalog-data.ts'
 import { assessWorkload } from '../assessment-engine.ts'
 import { translateIngressToGatewayApi } from '../ingress-translator.ts'
-import { MODERNIZATION_RECIPES, runModernizationRecipe } from '../recipes.ts'
-import { MMB_RUNTIME_SKILLS } from '../skills.ts'
-import type { CloudSource, MmbAsset, RecipeRunResult, WorkloadAssessmentResult, WorkloadType } from '../types.ts'
+import { MODERNIZATION_RECIPES, runModernizationRecipe, type ExtendedModernizationRecipe } from '../recipes.ts'
+import { PRACTITIONER_SKILLS, type PractitionerSkillInfo } from '../skills.ts'
+import type { CloudSource, RecipeRunResult, WorkloadAssessmentResult, WorkloadType } from '../types.ts'
 import type { WorkspaceScanResult } from '../workspace-scanner.ts'
 import { MigrationCenterIcon } from './MigrationCenterIcon.tsx'
 import { sendPromptToHarnessComposer, showNotificationToast, workbenchStore } from './workbench-state.ts'
@@ -88,54 +88,6 @@ spec:
                 port:
                   number: 8080`
 
-const PRESET_MULTIDOC_INGRESS = `apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: frontend-ingress
-  namespace: frontend
-  annotations:
-    kubernetes.io/ingress.class: "gke-external"
-spec:
-  tls:
-    - hosts:
-        - app.example.com
-      secretName: app-tls
-  rules:
-    - host: app.example.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: frontend-svc
-                port:
-                  number: 80
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: api-ingress
-  namespace: backend
-  annotations:
-    kubernetes.io/ingress.class: "gke-external"
-spec:
-  tls:
-    - hosts:
-        - api.example.com
-      secretName: api-tls
-  rules:
-    - host: api.example.com
-      http:
-        paths:
-          - path: /api/v1
-            pathType: Prefix
-            backend:
-              service:
-                name: api-service
-                port:
-                  number: 8080`
-
 export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): ReactElement | null {
   const state = useSyncExternalStore(
     workbenchStore.subscribe,
@@ -145,24 +97,25 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
   // Local state for assessment tab
   const [assessType, setAssessType] = useState<WorkloadType>('database')
   const [assessSource, setAssessSource] = useState<CloudSource>('aws')
-  const [assessTech, setAssessTech] = useState('Oracle 19c')
+  const [assessTech, setAssessTech] = useState('Oracle 19c RAC')
   const [assessScale, setAssessScale] = useState<'small' | 'medium' | 'large' | 'enterprise'>('large')
   const [hasTests, setHasTests] = useState<boolean>(true)
   const [assessResult, setAssessResult] = useState<WorkloadAssessmentResult | null>(() =>
-    assessWorkload({ workloadType: 'database', sourcePlatform: 'aws', sourceTechnology: 'Oracle 19c', workloadScale: 'large' }),
+    assessWorkload({ workloadType: 'database', sourcePlatform: 'aws', sourceTechnology: 'Oracle 19c RAC', workloadScale: 'large' }),
   )
 
-  // Local state for Ingress translator tab
+  // Local state for recipes tab
+  const [selectedRecipeId, setSelectedRecipeId] = useState<string>('java-spring-boot-3')
+  const [recipeResult, setRecipeResult] = useState<RecipeRunResult | null>(() => runModernizationRecipe('java-spring-boot-3', true))
+  const [showIngressTranslator, setShowIngressTranslator] = useState(false)
+
+  // Ingress translator state (embedded inside k8s recipe)
   const [ingressInput, setIngressInput] = useState(SAMPLE_INGRESS_YAML)
   const [translatedOutput, setTranslatedOutput] = useState(() => translateIngressToGatewayApi({ manifest: SAMPLE_INGRESS_YAML }))
-  const [copied, setCopied] = useState(false)
+  const [copiedIngress, setCopiedIngress] = useState(false)
 
-  // Local state for recipes tab
-  const [selectedRecipe, setSelectedRecipe] = useState<string>('oracle-plsql-to-bigquery')
-  const [recipeResult, setRecipeResult] = useState<RecipeRunResult | null>(() => runModernizationRecipe('oracle-plsql-to-bigquery', true))
-
-  // Filtered assets for Portfolio tab
-  const [domainFilter, setDomainFilter] = useState<'all' | 'migrate' | 'modernize' | 'build' | 'top-tier'>('all')
+  // Curated Blueprints filter
+  const [domainFilter, setDomainFilter] = useState<'all' | 'database' | 'app' | 'data' | 'cloud'>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
   // Workspace scan state
@@ -191,6 +144,8 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
   useEffect(() => {
     if (state.ingressPreload) {
       setIngressInput(state.ingressPreload)
+      setSelectedRecipeId('k8s-ingress-to-gateway-api')
+      setShowIngressTranslator(true)
       const res = translateIngressToGatewayApi({ manifest: state.ingressPreload })
       setTranslatedOutput(res)
     }
@@ -202,20 +157,20 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
     }
   }, [state.searchQuery])
 
-  const filteredAssets = useMemo(() => {
-    let list = [...MMB_ASSETS]
-    if (domainFilter === 'top-tier') {
-      list = list.filter(a => a.score >= 3.0)
-    } else if (domainFilter !== 'all') {
-      list = list.filter(a => a.domain === domainFilter)
+  // Filter 12 curated blueprints
+  const filteredBlueprints = useMemo(() => {
+    let list = [...CURATED_PRACTITIONER_BLUEPRINTS]
+    if (domainFilter !== 'all') {
+      list = list.filter(b => b.domain === domainFilter)
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim()
-      list = list.filter(a =>
-        a.name.toLowerCase().includes(q) ||
-        a.realityCheck.toLowerCase().includes(q) ||
-        a.tags.some(t => t.toLowerCase().includes(q)) ||
-        a.targetGcpServices.some(s => s.toLowerCase().includes(q)),
+      list = list.filter(b =>
+        b.title.toLowerCase().includes(q) ||
+        b.description.toLowerCase().includes(q) ||
+        b.sourceStack.some(s => s.toLowerCase().includes(q)) ||
+        b.targetStack.some(s => s.toLowerCase().includes(q)) ||
+        b.deliverables.some(d => d.toLowerCase().includes(q)),
       )
     }
     return list
@@ -241,7 +196,6 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
       if (res.ok) {
         const data: WorkspaceScanResult = await res.json()
         setScanResult(data)
-        // Auto-populate form
         setAssessTech(data.detectedSourceTech)
         const mappedType: WorkloadType =
           data.detectedWorkloadType === 'app-modernization' ? 'application' : data.detectedWorkloadType
@@ -265,13 +219,12 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
     }
   }
 
-  const handleLoadDiscoveredIngress = (): void => {
-    if (scanResult?.sampleIngressYaml) {
-      setIngressInput(scanResult.sampleIngressYaml.content)
-      const res = translateIngressToGatewayApi({ manifest: scanResult.sampleIngressYaml.content })
-      setTranslatedOutput(res)
-      workbenchStore.setActiveTab('ingress')
-      showNotificationToast(`✓ Loaded Ingress manifest from ${scanResult.sampleIngressYaml.path}`)
+  const handleSelectRecipe = (id: string): void => {
+    setSelectedRecipeId(id)
+    const res = runModernizationRecipe(id, true)
+    setRecipeResult(res)
+    if (id === 'k8s-ingress-to-gateway-api') {
+      setShowIngressTranslator(true)
     }
   }
 
@@ -282,9 +235,9 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
 
   const handleCopyTranslated = (): void => {
     navigator.clipboard?.writeText(translatedOutput.combinedYaml)
-    setCopied(true)
+    setCopiedIngress(true)
     showNotificationToast('✓ Copied Gateway API YAML to clipboard!')
-    setTimeout(() => { setCopied(false) }, 2000)
+    setTimeout(() => { setCopiedIngress(false) }, 2000)
   }
 
   const handleDownloadGatewayYaml = (): void => {
@@ -292,10 +245,10 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'gateway-api-resources.yaml'
+    a.download = 'gke-gateway-api.yaml'
     a.click()
     URL.revokeObjectURL(url)
-    showNotificationToast('✓ Downloaded gateway-api-resources.yaml')
+    showNotificationToast('✓ Downloaded gke-gateway-api.yaml')
   }
 
   const handleCopyReport = (): void => {
@@ -316,11 +269,7 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
     showNotificationToast('✓ Downloaded assessment report (.md)')
   }
 
-  const handleSimulateRecipe = (id: string): void => {
-    setSelectedRecipe(id)
-    const res = runModernizationRecipe(id, true)
-    setRecipeResult(res)
-  }
+  const activeRecipe = MODERNIZATION_RECIPES.find(r => r.id === selectedRecipeId) as ExtendedModernizationRecipe | undefined
 
   return (
     <div style={styles.overlayBackdrop}>
@@ -332,7 +281,10 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
               <MigrationCenterIcon size={24} />
             </div>
             <div>
-              <h2 style={styles.headerTitle}>{t('workbench.title')}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2 style={styles.headerTitle}>{t('workbench.title')}</h2>
+                <span style={styles.studioBadge}>MMB Studio</span>
+              </div>
               <p style={styles.headerSubtitle}>{t('workbench.subtitle')}</p>
             </div>
           </div>
@@ -357,91 +309,62 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
           </div>
         </div>
 
-        {/* Tab Navigation */}
+        {/* 4 Streamlined Tabs */}
         <div style={styles.tabBar}>
           <button
             type="button"
             onClick={() => { workbenchStore.setActiveTab('portfolio') }}
             style={state.activeTab === 'portfolio' ? styles.tabActive : styles.tab}
           >
-            📊 {t('tab.portfolio')}
+            🏛️ Curated Blueprints (12)
           </button>
           <button
             type="button"
             onClick={() => { workbenchStore.setActiveTab('assessment') }}
             style={state.activeTab === 'assessment' ? styles.tabActive : styles.tab}
           >
-            ⚡ {t('tab.assessment')}
-          </button>
-          <button
-            type="button"
-            onClick={() => { workbenchStore.setActiveTab('ingress') }}
-            style={state.activeTab === 'ingress' ? styles.tabActive : styles.tab}
-          >
-            🔄 {t('tab.ingress')}
-          </button>
-          <button
-            type="button"
-            onClick={() => { workbenchStore.setActiveTab('skills') }}
-            style={state.activeTab === 'skills' ? styles.tabActive : styles.tab}
-          >
-            🧠 {t('tab.skills')} ({MMB_RUNTIME_SKILLS.length})
+            📐 Workload Assessment &amp; Wave Plan
           </button>
           <button
             type="button"
             onClick={() => { workbenchStore.setActiveTab('recipes') }}
             style={state.activeTab === 'recipes' ? styles.tabActive : styles.tab}
           >
-            🛠️ {t('tab.recipes')} ({MODERNIZATION_RECIPES.length})
+            🛠️ Modernization Recipes (6)
+          </button>
+          <button
+            type="button"
+            onClick={() => { workbenchStore.setActiveTab('skills') }}
+            style={state.activeTab === 'skills' ? styles.tabActive : styles.tab}
+          >
+            ⚡ Practitioner Skills (5)
           </button>
         </div>
 
         {/* Tab Content */}
         <div style={styles.contentArea}>
-          {/* TAB 1: PORTFOLIO & 46 ASSETS */}
+          {/* TAB 1: CURATED BLUEPRINTS (12) */}
           {state.activeTab === 'portfolio' && (
             <div>
-              {/* Stats Strip */}
-              <div style={styles.statsStrip}>
-                <div style={styles.statCard}>
-                  <div style={styles.statNumber}>46</div>
-                  <div style={styles.statLabel}>{t('stats.total')}</div>
-                </div>
-                <div style={styles.statCard}>
-                  <div style={{ ...styles.statNumber, color: '#34A853' }}>7</div>
-                  <div style={styles.statLabel}>{t('stats.migrate')}</div>
-                </div>
-                <div style={styles.statCard}>
-                  <div style={{ ...styles.statNumber, color: '#4285F4' }}>18</div>
-                  <div style={styles.statLabel}>{t('stats.modernize')}</div>
-                </div>
-                <div style={styles.statCard}>
-                  <div style={{ ...styles.statNumber, color: '#FBBC04' }}>21</div>
-                  <div style={styles.statLabel}>{t('stats.build')}</div>
-                </div>
-                <div style={styles.statCard}>
-                  <div style={{ ...styles.statNumber, color: '#EA4335' }}>4</div>
-                  <div style={styles.statLabel}>{t('stats.topTier')}</div>
-                </div>
-                <div style={styles.statCard}>
-                  <div style={{ ...styles.statNumber, color: '#A142F4' }}>3.5 / 5</div>
-                  <div style={styles.statLabel}>Peak (Oracle MCP)</div>
-                </div>
-              </div>
-
               {/* Filter & Search Bar */}
               <div style={styles.filterRow}>
                 <div style={styles.filterButtonGroup}>
-                  {(['all', 'migrate', 'modernize', 'build', 'top-tier'] as const).map(dom => (
+                  {(
+                    [
+                      { id: 'all', label: 'All Blueprints (12)' },
+                      { id: 'database', label: 'Database (3)' },
+                      { id: 'app', label: 'App Modernization (3)' },
+                      { id: 'data', label: 'Data & Lakehouse (2)' },
+                      { id: 'cloud', label: 'Cloud Replatform (4)' },
+                    ] as const
+                  ).map(filter => (
                     <button
-                      key={dom}
+                      key={filter.id}
                       type="button"
-                      onClick={() => { setDomainFilter(dom) }}
-                      style={domainFilter === dom ? styles.filterBtnActive : styles.filterBtn}
+                      onClick={() => { setDomainFilter(filter.id) }}
+                      style={domainFilter === filter.id ? styles.filterBtnActive : styles.filterBtn}
                     >
-                      {dom === 'all' ? t('filter.all') :
-                        dom === 'top-tier' ? '⭐ Top-Tier (3.0+)' :
-                          dom.charAt(0).toUpperCase() + dom.slice(1)}
+                      {filter.label}
                     </button>
                   ))}
                 </div>
@@ -454,102 +377,104 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
                 />
               </div>
 
-              {/* Asset Grid */}
-              <div style={styles.assetGrid}>
-                {filteredAssets.map((asset: MmbAsset) => (
-                  <div key={asset.id} style={styles.assetCard}>
-                    <div style={styles.assetCardHeader}>
-                      <div style={styles.assetCardTitleWrap}>
-                        <span style={styles.assetCardName}>{asset.name}</span>
-                        <span style={{
-                          ...styles.domainTag,
-                          background: asset.domain === 'migrate' ? 'rgba(52,168,83,0.15)' :
-                            asset.domain === 'modernize' ? 'rgba(66,133,244,0.15)' : 'rgba(251,188,4,0.15)',
-                          color: asset.domain === 'migrate' ? '#34A853' :
-                            asset.domain === 'modernize' ? '#669df6' : '#fdd663',
-                        }}>
-                          {asset.domain.toUpperCase()}
-                        </span>
-                      </div>
-                      <div style={{
-                        ...styles.scoreBadge,
-                        background: asset.score >= 3.0 ? 'rgba(52,168,83,0.2)' :
-                          asset.score >= 2.0 ? 'rgba(66,133,244,0.2)' : 'rgba(255,255,255,0.08)',
-                        color: asset.score >= 3.0 ? '#81c995' :
-                          asset.score >= 2.0 ? '#8ab4f8' : '#9aa0a6',
-                      }}>
-                        ★ {asset.score.toFixed(1)} / 5.0
+              {/* Blueprint Grid */}
+              <div style={styles.blueprintGrid}>
+                {filteredBlueprints.map((blueprint: CuratedBlueprint) => (
+                  <div key={blueprint.id} style={styles.blueprintCard}>
+                    <div style={styles.blueprintCardHeader}>
+                      <div>
+                        <span style={styles.blueprintCardTitle}>{blueprint.title}</span>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
+                          <span style={styles.domainTag}>{blueprint.domainLabel}</span>
+                          <span style={styles.scoreBadge}>★ {blueprint.score.toFixed(1)} Production-Ready</span>
+                        </div>
                       </div>
                     </div>
 
-                    <p style={styles.assetRealityText}>{asset.realityCheck}</p>
+                    <p style={styles.blueprintDesc}>{blueprint.description}</p>
 
-                    <div style={styles.servicesRow}>
-                      <span style={styles.servicesLabel}>{t('card.services')}:</span>
-                      {asset.targetGcpServices.map((s: string) => (
-                        <span key={s} style={styles.serviceChip}>{s}</span>
-                      ))}
+                    {/* Source -> Target Stack Flow */}
+                    <div style={styles.stackFlowBox}>
+                      <div style={styles.stackFlowRow}>
+                        <span style={styles.stackLabel}>Source:</span>
+                        <div style={styles.stackChipsWrap}>
+                          {blueprint.sourceStack.map(s => (
+                            <span key={s} style={styles.sourceChip}>{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={styles.stackFlowRow}>
+                        <span style={{ ...styles.stackLabel, color: '#81c995' }}>Target GCP:</span>
+                        <div style={styles.stackChipsWrap}>
+                          {blueprint.targetStack.map(t => (
+                            <span key={t} style={styles.targetChip}>{t}</span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
-                    <div style={styles.recommendationBox}>
-                      <strong style={{ color: '#8ab4f8' }}>Roadmap:</strong> {asset.antigravityRecommendation}
+                    {/* Deliverables */}
+                    <div style={styles.deliverablesBox}>
+                      <span style={styles.deliverablesTitle}>Practitioner Deliverables:</span>
+                      <ul style={styles.deliverablesList}>
+                        {blueprint.deliverables.map(d => (
+                          <li key={d} style={styles.deliverableItem}>✓ {d}</li>
+                        ))}
+                      </ul>
                     </div>
 
+                    {/* Action Bar */}
                     <div style={styles.cardFooter}>
-                      <span style={styles.filesText}>
-                        {asset.codeFiles} files {asset.hasTests ? '• Tests ✓' : '• No Tests'}
-                      </span>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            sendPromptToHarnessComposer(
-                              `Review the Google Cloud blueprint "${asset.name}" (${asset.domain.toUpperCase()} domain, score ${asset.score.toFixed(1)}/5.0).\nTarget GCP Services: ${asset.targetGcpServices.join(', ')}.\nContext: ${asset.realityCheck}\nStrategic Roadmap: ${asset.antigravityRecommendation}\nProvide detailed architectural recommendations for migrating our enterprise workloads to this pattern.`,
-                              { autoSubmit: false },
-                            )
-                          }}
-                          style={styles.cardSecondaryBtn}
-                          title="Draft a prompt in chat discussing this blueprint"
-                        >
-                          💬 Send to Chat
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            sendPromptToHarnessComposer(
-                              `Execute migration analysis and setup for blueprint "${asset.name}". Target Google Cloud services: ${asset.targetGcpServices.join(', ')}. Examine workspace assets, check prerequisite tools, and formulate the landing zone execution plan.`,
-                              { autoSubmit: true },
-                            )
-                          }}
-                          style={styles.cardRunBtn}
-                          title="Immediately trigger execution with active subagent"
-                        >
-                          🚀 Run with Agent
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAssessTech(asset.name)
-                            let nextType: WorkloadType = 'application'
-                            if (asset.domain === 'migrate' && asset.id.includes('lakehouse')) nextType = 'data-pipeline'
-                            else if (asset.id.includes('oracle') || asset.id.includes('data')) nextType = 'database'
-                            else if (asset.id.includes('k8s') || asset.id.includes('gke')) nextType = 'kubernetes'
-                            setAssessType(nextType)
-                            const updated = assessWorkload({
-                              workloadType: nextType,
-                              sourcePlatform: assessSource,
-                              sourceTechnology: asset.name,
-                              workloadScale: assessScale,
-                              hasTests: asset.hasTests,
-                            })
-                            setAssessResult(updated)
-                            workbenchStore.setActiveTab('assessment')
-                          }}
-                          style={styles.cardActionBtn}
-                        >
-                          ⚡ Assess →
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sendPromptToHarnessComposer(
+                            `Execute enterprise migration for blueprint "${blueprint.title}".\nSource Stack: ${blueprint.sourceStack.join(', ')}\nTarget GCP Architecture: ${blueprint.targetStack.join(', ')}\nDeliverables to generate:\n${blueprint.deliverables.map(d => `- ${d}`).join('\n')}\nRecommended Skills: ${blueprint.recommendedSkills.map(s => `/${s}`).join(', ')}.\nFormulate the technical execution plan, verify prerequisites, and begin Wave 0 discovery.`,
+                            { autoSubmit: true },
+                          )
+                        }}
+                        style={styles.cardPrimaryBtn}
+                        title="Immediately trigger execution with active subagent"
+                      >
+                        🚀 Run Blueprint with Agent
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sendPromptToHarnessComposer(
+                            `Review architecture and migration strategy for blueprint "${blueprint.title}".\nSource: ${blueprint.sourceStack.join(', ')} -> Target: ${blueprint.targetStack.join(', ')}.\nDeliverables: ${blueprint.deliverables.join('; ')}.\nProvide technical review and readiness checklist.`,
+                            { autoSubmit: false },
+                          )
+                        }}
+                        style={styles.cardSecondaryBtn}
+                        title="Draft a prompt in chat discussing this blueprint"
+                      >
+                        💬 Send to Chat
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssessTech(blueprint.sourceStack[0] ?? blueprint.title)
+                          let nextType: WorkloadType = 'application'
+                          if (blueprint.domain === 'database') nextType = 'database'
+                          else if (blueprint.domain === 'data') nextType = 'data-pipeline'
+                          else if (blueprint.domain === 'cloud' && blueprint.id.includes('ingress')) nextType = 'kubernetes'
+                          setAssessType(nextType)
+                          const updated = assessWorkload({
+                            workloadType: nextType,
+                            sourcePlatform: assessSource,
+                            sourceTechnology: blueprint.sourceStack[0] ?? blueprint.title,
+                            workloadScale: assessScale,
+                            hasTests,
+                          })
+                          setAssessResult(updated)
+                          workbenchStore.setActiveTab('assessment')
+                        }}
+                        style={styles.cardScopeBtn}
+                        title="Open in Workload Assessment"
+                      >
+                        📐 Scope &amp; Assess →
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -557,7 +482,7 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
             </div>
           )}
 
-          {/* TAB 2: WORKLOAD ASSESSMENT */}
+          {/* TAB 2: WORKLOAD ASSESSMENT & WAVE PLAN */}
           {state.activeTab === 'assessment' && (
             <div style={styles.splitLayout}>
               {/* Left Column: Form & Scan Controls */}
@@ -586,16 +511,7 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
                       <span>({scanResult.totalFilesScanned} files)</span>
                     </div>
                     <div style={{ fontSize: '11px', color: '#9aa0a6' }}>
-                      Found {scanResult.markers.length} migration markers.
-                      {scanResult.sampleIngressYaml && (
-                        <button
-                          type="button"
-                          onClick={handleLoadDiscoveredIngress}
-                          style={styles.loadIngressNoticeBtn}
-                        >
-                          Load Ingress into Tab 3 ↗
-                        </button>
-                      )}
+                      Found {scanResult.markers.length} migration markers in workspace.
                     </div>
                   </div>
                 )}
@@ -609,7 +525,7 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
                   >
                     <option value="database">Database (Oracle, SQL Server, Postgres)</option>
                     <option value="kubernetes">Kubernetes (Ingress, Microservices, Gateway API)</option>
-                    <option value="data-pipeline">Data Lake & Pipeline (Hadoop, Spark, Iceberg)</option>
+                    <option value="data-pipeline">Data Lake &amp; Pipeline (Hadoop, Spark, Iceberg)</option>
                     <option value="application">Application Monolith (Java Spring Boot, .NET Framework)</option>
                   </select>
                 </div>
@@ -634,7 +550,7 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
                     type="text"
                     value={assessTech}
                     onChange={(e) => { setAssessTech(e.target.value) }}
-                    placeholder="e.g. Oracle 19c, K8s Ingress NGINX, PySpark 2.4, Spring Boot 2.7"
+                    placeholder="e.g. Oracle 19c RAC, Spring Boot 2.7, Hadoop Spark, .NET 4.8"
                     style={styles.textInput}
                   />
                 </div>
@@ -690,7 +606,7 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
                           type="button"
                           onClick={() => {
                             sendPromptToHarnessComposer(
-                              `Execute the 4-Wave Migration Plan for ${assessResult.sourceTechnology} (${assessResult.sourcePlatform.toUpperCase()}) -> ${assessResult.recommendedTarget}.\nBegin with Wave 0: Discovery & Landing Zone. Recommended Skills: ${assessResult.recommendedSkills.map(s => `/${s}`).join(', ')}.\nAction Plan:\n${assessResult.actionPlan.join('\n')}`,
+                              `Execute the 4-Wave Migration Plan for ${assessResult.sourceTechnology} (${assessResult.sourcePlatform.toUpperCase()}) -> ${assessResult.recommendedTarget}.\nBegin with Wave 0: Discovery & Landing Zone.\nRecommended Skills: ${assessResult.recommendedSkills.map(s => `/${s}`).join(', ')}.\nAction Plan:\n${assessResult.actionPlan.join('\n')}`,
                               { autoSubmit: true },
                             )
                           }}
@@ -817,7 +733,7 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
                         <p style={{ margin: '0 0 6px', fontSize: '12px', color: '#e8eaed' }}>
                           <strong style={{ color: '#8ab4f8' }}>License Optimization:</strong> {assessResult.tcoModel.licenseOptimization}
                         </p>
-                        <p style={{ margin: '0 0 6px', fontSize: '12px', color: '#e8eaed' }}>
+                        <p style={{ margin: '0 0 6px', fontSize: '12px', color: '#81c995' }}>
                           <strong style={{ color: '#81c995' }}>Ops Efficiency:</strong> {assessResult.tcoModel.opsEfficiencyGain}
                         </p>
                         <p style={{ margin: 0, fontSize: '12px', color: '#e8eaed' }}>
@@ -825,21 +741,6 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
                         </p>
                       </div>
                     )}
-
-                    {/* Recommended Blueprints & Skills */}
-                    <div style={styles.resultCard}>
-                      <h4 style={styles.resultCardTitle}>📦 Recommended Blueprints &amp; Mature Skills</h4>
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                        {assessResult.recommendedBlueprints.map((bp: string) => (
-                          <span key={bp} style={styles.blueprintChip}>Blueprint: {bp}</span>
-                        ))}
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {assessResult.recommendedSkills.map((sk: string) => (
-                          <span key={sk} style={styles.skillChip}>Skill: {sk}</span>
-                        ))}
-                      </div>
-                    </div>
 
                     {/* Action Plan */}
                     <div style={styles.resultCard}>
@@ -868,148 +769,273 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
             </div>
           )}
 
-          {/* TAB 3: INGRESS TO GATEWAY API TRANSLATOR */}
-          {state.activeTab === 'ingress' && (
-            <div>
-              <div style={styles.ingressTopBar}>
-                <div>
-                  <h3 style={styles.sectionHeading}>🔄 {t('ingress.title')}</h3>
-                  <p style={styles.sectionDesc}>
-                    Converts standard Kubernetes networking.k8s.io/v1 Ingress manifests into GKE
-                    GatewayClass (gke-l7-global-external-managed) &amp; HTTPRoute definitions.
-                    Supports single-document manifests and multi-document YAML streams (---).
-                  </p>
-                </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIngressInput(SAMPLE_INGRESS_YAML)
-                      const res = translateIngressToGatewayApi({ manifest: SAMPLE_INGRESS_YAML })
-                      setTranslatedOutput(res)
-                    }}
-                    style={styles.secondaryButton}
-                  >
-                    📄 Standard Sample
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIngressInput(PRESET_CANARY_INGRESS)
-                      const res = translateIngressToGatewayApi({ manifest: PRESET_CANARY_INGRESS })
-                      setTranslatedOutput(res)
-                    }}
-                    style={styles.secondaryButton}
-                  >
-                    🚦 Canary + TLS
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIngressInput(PRESET_MULTIDOC_INGRESS)
-                      const res = translateIngressToGatewayApi({ manifest: PRESET_MULTIDOC_INGRESS })
-                      setTranslatedOutput(res)
-                    }}
-                    style={styles.secondaryButton}
-                  >
-                    📑 Multi-Doc Stream (---)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleTranslateIngress}
-                    style={styles.primaryButtonInline}
-                  >
-                    ⚡ {t('ingress.translate')}
-                  </button>
+          {/* TAB 3: MODERNIZATION RECIPES (6) WITH DIFF PREVIEWS & EMBEDDED TRANSLATOR */}
+          {state.activeTab === 'recipes' && (
+            <div style={styles.splitLayout}>
+              {/* Left Column: Recipes List */}
+              <div style={styles.formPanel}>
+                <h3 style={styles.sectionHeading}>🛠️ Modernization Recipes (6)</h3>
+                <p style={styles.sectionDesc}>
+                  Lossless AST refactoring recipes inspired by OpenRewrite and Moderne for enterprise codebases.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {MODERNIZATION_RECIPES.map(recipe => (
+                    <button
+                      key={recipe.id}
+                      type="button"
+                      onClick={() => { handleSelectRecipe(recipe.id) }}
+                      style={selectedRecipeId === recipe.id ? styles.recipeSelectBtnActive : styles.recipeSelectBtn}
+                    >
+                      <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>
+                        {recipe.title}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--dsw-text-secondary, #9aa0a6)' }}>
+                        Category: {recipe.category.toUpperCase()} • Verified AST
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              <div style={styles.translatorPanes}>
-                {/* Left: Input Ingress */}
-                <div style={styles.paneHalf}>
-                  <div style={styles.paneHeader}>Source Ingress Manifest (YAML)</div>
-                  <textarea
-                    value={ingressInput}
-                    onChange={(e) => { setIngressInput(e.target.value) }}
-                    style={styles.codeTextarea}
-                    spellCheck={false}
-                  />
-                </div>
-
-                {/* Right: Output Gateway API */}
-                <div style={styles.paneHalf}>
-                  <div style={styles.paneHeaderWithAction}>
-                    <span>Target GKE Gateway API Manifest (YAML)</span>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button
-                        type="button"
-                        onClick={handleCopyTranslated}
-                        style={styles.copyButton}
-                      >
-                        {copied ? '✓ ' + t('ingress.copied') : '📋 ' + t('ingress.copy')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleDownloadGatewayYaml}
-                        style={styles.copyButton}
-                      >
-                        📥 Download YAML
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          sendPromptToHarnessComposer(
-                            `Review and apply the following translated GKE Gateway API resources to our cluster:\n\n\`\`\`yaml\n${translatedOutput.combinedYaml}\`\`\`\n1. Validate syntax with \`kubectl apply --dry-run=client -f -\`.\n2. Confirm GatewayClass and HTTPRoute binding.\n3. Report verification results.`,
-                            { autoSubmit: false },
-                          )
-                        }}
-                        style={styles.agentApplyBtn}
-                      >
-                        🚀 Apply with Agent
-                      </button>
+              {/* Right Column: Execution details, Before/After Diff, and Quick Ingress Translator */}
+              <div style={styles.resultPanel}>
+                {activeRecipe && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                      <h3 style={{ ...styles.sectionHeading, margin: 0 }}>{activeRecipe.title}</h3>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sendPromptToHarnessComposer(
+                              `Execute Modernization Recipe "${activeRecipe.title}" (${activeRecipe.id}).\nTarget Files: ${activeRecipe.targetFiles}\nSource Pattern: ${activeRecipe.sourcePattern}\nTarget Pattern: ${activeRecipe.targetPattern}\nVerification Command: \`${activeRecipe.verificationCommand}\`\nExecute the code refactoring on target files, verify compilation, and report all modified lines.`,
+                              { autoSubmit: true },
+                            )
+                          }}
+                          style={styles.agentExecuteBtn}
+                          title="Instruct agent to execute this recipe on workspace files"
+                        >
+                          🚀 Execute Recipe in Chat
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sendPromptToHarnessComposer(
+                              `Review the refactoring spec for recipe "${activeRecipe.title}".\nTarget Files: ${activeRecipe.targetFiles}\nVerification Command: \`${activeRecipe.verificationCommand}\``,
+                              { autoSubmit: false },
+                            )
+                          }}
+                          style={styles.cardSecondaryBtn}
+                        >
+                          💬 Send to Chat
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <textarea
-                    readOnly
-                    value={translatedOutput.combinedYaml}
-                    style={{ ...styles.codeTextarea, background: 'rgba(0,0,0,0.4)', color: '#81c995' }}
-                    spellCheck={false}
-                  />
-                </div>
-              </div>
+                    <p style={{ ...styles.sectionDesc, marginBottom: '12px' }}>{activeRecipe.description}</p>
 
-              {/* Translation Summary Strip */}
-              <div style={styles.translationSummary}>
-                <span>✓ Converted <strong>{translatedOutput.summary.routesConverted}</strong> Route Rules</span>
-                <span>• Backend Services: <strong>{translatedOutput.summary.backendServices.join(', ') || 'none'}</strong></span>
-                <span>• TLS Hosts: <strong>{translatedOutput.summary.tlsHosts.join(', ') || 'None (HTTP only)'}</strong></span>
-                {translatedOutput.summary.crossNamespaceGrantGenerated && (
-                  <span>• ReferenceGrant: <strong style={{ color: '#81c995' }}>Generated ✓</strong></span>
+                    {/* Target Files & Patterns */}
+                    <div style={styles.targetFilesBox}>
+                      <span style={{ color: '#8ab4f8', fontWeight: 600 }}>Target Files &amp; AST Scope:</span>{' '}
+                      <code style={{ color: '#ffffff' }}>{activeRecipe.targetFiles}</code>
+                    </div>
+
+                    {/* Before -> After Diff Preview */}
+                    <div style={styles.diffContainer}>
+                      <div style={styles.diffPane}>
+                        <div style={styles.diffHeaderBefore}>🔴 Before (Legacy Pattern)</div>
+                        <pre style={styles.diffCode}>{activeRecipe.beforeCode}</pre>
+                      </div>
+                      <div style={styles.diffPane}>
+                        <div style={styles.diffHeaderAfter}>🟢 After (Modernized Target)</div>
+                        <pre style={styles.diffCode}>{activeRecipe.afterCode}</pre>
+                      </div>
+                    </div>
+
+                    {/* Embedded Ingress Translator Expander (Folded into Recipe 6) */}
+                    {activeRecipe.id === 'k8s-ingress-to-gateway-api' && (
+                      <div style={styles.ingressExpanderCard}>
+                        <div
+                          style={styles.ingressExpanderHeader}
+                          onClick={() => { setShowIngressTranslator(!showIngressTranslator) }}
+                        >
+                          <span style={{ fontWeight: 600, color: '#81c995', fontSize: '13px' }}>
+                            ⚡ Interactive Ingress-to-Gateway YAML Translator {showIngressTranslator ? '▼' : '▶'}
+                          </span>
+                          <span style={{ fontSize: '11px', color: '#9aa0a6' }}>Click to toggle AST studio</span>
+                        </div>
+
+                        {showIngressTranslator && (
+                          <div style={{ marginTop: '12px' }}>
+                            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIngressInput(SAMPLE_INGRESS_YAML)
+                                  const res = translateIngressToGatewayApi({ manifest: SAMPLE_INGRESS_YAML })
+                                  setTranslatedOutput(res)
+                                }}
+                                style={styles.secondaryButton}
+                              >
+                                📄 Standard Sample
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIngressInput(PRESET_CANARY_INGRESS)
+                                  const res = translateIngressToGatewayApi({ manifest: PRESET_CANARY_INGRESS })
+                                  setTranslatedOutput(res)
+                                }}
+                                style={styles.secondaryButton}
+                              >
+                                🚦 Canary + TLS
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleTranslateIngress}
+                                style={styles.primaryButtonInline}
+                              >
+                                ⚡ Translate to Gateway API
+                              </button>
+                            </div>
+
+                            <div style={styles.translatorPanesMini}>
+                              <div style={styles.paneHalf}>
+                                <div style={styles.paneHeader}>Source Ingress Manifest</div>
+                                <textarea
+                                  value={ingressInput}
+                                  onChange={(e) => { setIngressInput(e.target.value) }}
+                                  style={styles.codeTextareaMini}
+                                  spellCheck={false}
+                                />
+                              </div>
+                              <div style={styles.paneHalf}>
+                                <div style={styles.paneHeaderWithAction}>
+                                  <span>GKE Gateway API Output</span>
+                                  <div style={{ display: 'flex', gap: '6px' }}>
+                                    <button
+                                      type="button"
+                                      onClick={handleCopyTranslated}
+                                      style={styles.copyButton}
+                                    >
+                                      {copiedIngress ? '✓ Copied' : '📋 Copy'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleDownloadGatewayYaml}
+                                      style={styles.copyButton}
+                                    >
+                                      📥 Download
+                                    </button>
+                                  </div>
+                                </div>
+                                <textarea
+                                  readOnly
+                                  value={translatedOutput.combinedYaml}
+                                  style={{ ...styles.codeTextareaMini, background: 'rgba(0,0,0,0.4)', color: '#81c995' }}
+                                  spellCheck={false}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Hermetic Verification Command Card with Copy */}
+                    <div style={styles.resultCard}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#8ab4f8' }}>Hermetic Verification Command</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(activeRecipe.verificationCommand)
+                            showNotificationToast('✓ Copied verification command!')
+                          }}
+                          style={styles.copyButton}
+                        >
+                          📋 Copy Command
+                        </button>
+                      </div>
+                      <code style={{ display: 'block', background: '#121316', padding: '8px 12px', borderRadius: '6px', color: '#81c995', fontSize: '12px' }}>
+                        {activeRecipe.verificationCommand}
+                      </code>
+                    </div>
+
+                    {recipeResult && (
+                      <div style={styles.resultCard}>
+                        <h4 style={styles.resultCardTitle}>Automated Verification Steps</h4>
+                        <ul style={styles.actionPlanList}>
+                          {recipeResult.verificationSteps.map((step: string) => (
+                            <li key={step} style={styles.actionPlanItem}>{step}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* TAB 4: MATURE SKILLS */}
+          {/* TAB 4: PRACTITIONER SKILLS (5) */}
           {state.activeTab === 'skills' && (
             <div>
-              <h3 style={styles.sectionHeading}>🧠 Mature MMB Runtime Skills</h3>
+              <h3 style={styles.sectionHeading}>⚡ Practitioner Skills (5)</h3>
               <p style={styles.sectionDesc}>
-                Baked-in skills registered directly into the DeepSeek Harness runtime (<code style={{ color: '#8ab4f8' }}>ctx.skills</code>) available to agents via <code style={{ color: '#8ab4f8' }}>tool-skill</code>.
+                High-maturity runtime skills baked directly into DeepSeek Harness.
+                Each skill equips the model with specialized architectural guidance, concrete workflow steps, and executable prompts.
               </p>
 
               <div style={styles.skillsGrid}>
-                {MMB_RUNTIME_SKILLS.map(skill => (
+                {PRACTITIONER_SKILLS.map((skill: PractitionerSkillInfo) => (
                   <div key={skill.name} style={styles.skillCard}>
                     <div style={styles.skillCardHeader}>
-                      <span style={styles.skillName}>/{skill.name}</span>
+                      <div>
+                        <span style={styles.skillName}>/{skill.name}</span>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', marginTop: '2px' }}>
+                          {skill.title}
+                        </div>
+                      </div>
                       <span style={styles.skillSourceBadge}>Runtime In-Box</span>
                     </div>
+
                     <p style={styles.skillDesc}>{skill.description}</p>
-                    <div style={styles.skillContentPreview}>
-                      <pre style={styles.skillPre}>{skill.content.slice(0, 300)}...</pre>
+
+                    <div style={styles.skillSection}>
+                      <span style={styles.skillSectionTitle}>When to Use:</span>
+                      <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#bdc1c6' }}>{skill.whenToUse}</p>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
+
+                    <div style={styles.skillSection}>
+                      <span style={styles.skillSectionTitle}>Agent Workflow Steps:</span>
+                      <ol style={{ margin: '4px 0 0', paddingLeft: '16px', fontSize: '11px', color: '#e8eaed' }}>
+                        {skill.workflowSteps.map(step => (
+                          <li key={step} style={{ marginBottom: '2px' }}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+
+                    <div style={styles.skillSection}>
+                      <span style={styles.skillSectionTitle}>Starter Prompts (Click to Run):</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                        {skill.starterPrompts.map(prompt => (
+                          <button
+                            key={prompt}
+                            type="button"
+                            onClick={() => {
+                              sendPromptToHarnessComposer(`/${skill.name} ${prompt}`, { autoSubmit: true })
+                            }}
+                            style={styles.starterPromptPill}
+                            title="Click to dispatch this prompt to active session"
+                          >
+                            💬 "{prompt}"
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '10px' }}>
                       <button
                         type="button"
                         onClick={() => {
@@ -1039,102 +1065,6 @@ export function MigrationCenterWorkbench({ t }: MigrationCenterWorkbenchProps): 
               </div>
             </div>
           )}
-
-          {/* TAB 5: MODERNIZATION RECIPES */}
-          {state.activeTab === 'recipes' && (
-            <div style={styles.splitLayout}>
-              {/* Left Column: Recipes List */}
-              <div style={styles.formPanel}>
-                <h3 style={styles.sectionHeading}>🛠️ Automated Modernization Recipes</h3>
-                <p style={styles.sectionDesc}>
-                  Lossless AST refactoring recipes inspired by OpenRewrite and Moderne for enterprise codebases.
-                </p>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {MODERNIZATION_RECIPES.map(recipe => (
-                    <button
-                      key={recipe.id}
-                      type="button"
-                      onClick={() => { handleSimulateRecipe(recipe.id) }}
-                      style={selectedRecipe === recipe.id ? styles.recipeSelectBtnActive : styles.recipeSelectBtn}
-                    >
-                      <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>
-                        {recipe.title}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--dsw-text-secondary, #9aa0a6)' }}>
-                        Category: {recipe.category.toUpperCase()}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Right Column: Execution details */}
-              <div style={styles.resultPanel}>
-                {recipeResult && (
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                      <h3 style={{ ...styles.sectionHeading, margin: 0 }}>{recipeResult.title}</h3>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const recipe = MODERNIZATION_RECIPES.find(r => r.id === recipeResult.recipeId)
-                            sendPromptToHarnessComposer(
-                              `Execute Modernization Recipe "${recipeResult.title}" (${recipeResult.recipeId}).\nSource Pattern: ${recipe?.sourcePattern ?? ''}\nTarget Pattern: ${recipe?.targetPattern ?? ''}\nVerification Command: \`${recipe?.verificationCommand ?? ''}\`\nExecute code refactoring on target files and run the verification command to confirm clean compilation and zero regression.`,
-                              { autoSubmit: true },
-                            )
-                          }}
-                          style={styles.agentExecuteBtn}
-                        >
-                          🚀 Execute Recipe in Chat
-                        </button>
-                        <span style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', background: 'rgba(52,168,83,0.2)', color: '#81c995' }}>
-                          STATUS: {recipeResult.status.toUpperCase()}
-                        </span>
-                      </div>
-                    </div>
-                    <p style={{ ...styles.sectionDesc, marginBottom: '16px' }}>{recipeResult.description}</p>
-
-                    {/* Verification Command Card with Copy */}
-                    {(() => {
-                      const recipe = MODERNIZATION_RECIPES.find(r => r.id === recipeResult.recipeId)
-                      if (!recipe) return null
-                      return (
-                        <div style={styles.resultCard}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#8ab4f8' }}>Hermetic Verification Command</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard?.writeText(recipe.verificationCommand)
-                                showNotificationToast('✓ Copied verification command!')
-                              }}
-                              style={styles.copyButton}
-                            >
-                              📋 Copy Command
-                            </button>
-                          </div>
-                          <code style={{ display: 'block', background: '#121316', padding: '8px 12px', borderRadius: '6px', color: '#81c995', fontSize: '12px' }}>
-                            {recipe.verificationCommand}
-                          </code>
-                        </div>
-                      )
-                    })()}
-
-                    <div style={styles.resultCard}>
-                      <h4 style={styles.resultCardTitle}>Automated Verification Steps</h4>
-                      <ul style={styles.actionPlanList}>
-                        {recipeResult.verificationSteps.map((step: string) => (
-                          <li key={step} style={styles.actionPlanItem}>{step}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -1148,19 +1078,19 @@ const styles: Record<string, CSSProperties> = {
     left: 0,
     right: 0,
     bottom: 0,
-    background: 'rgba(0, 0, 0, 0.75)',
+    background: 'rgba(0, 0, 0, 0.78)',
     backdropFilter: 'blur(8px)',
     zIndex: 9999,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '24px',
+    padding: '20px',
   },
   modalContainer: {
-    width: '94vw',
-    maxWidth: '1280px',
-    height: '88vh',
-    maxHeight: '900px',
+    width: '95vw',
+    maxWidth: '1320px',
+    height: '90vh',
+    maxHeight: '920px',
     background: '#1a1b1e',
     borderRadius: '12px',
     border: '1px solid rgba(255, 255, 255, 0.12)',
@@ -1199,6 +1129,16 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '18px',
     fontWeight: 600,
     color: '#ffffff',
+  },
+  studioBadge: {
+    fontSize: '10px',
+    fontWeight: 700,
+    padding: '2px 8px',
+    borderRadius: '12px',
+    background: 'rgba(52, 168, 83, 0.2)',
+    color: '#81c995',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
   },
   headerSubtitle: {
     margin: '2px 0 0',
@@ -1257,30 +1197,6 @@ const styles: Record<string, CSSProperties> = {
     padding: '20px 24px',
     overflowY: 'auto',
   },
-  statsStrip: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-    gap: '12px',
-    marginBottom: '16px',
-  },
-  statCard: {
-    background: 'rgba(255, 255, 255, 0.03)',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    borderRadius: '8px',
-    padding: '12px 16px',
-    textAlign: 'center',
-  },
-  statNumber: {
-    fontSize: '22px',
-    fontWeight: 700,
-    color: '#ffffff',
-  },
-  statLabel: {
-    fontSize: '11px',
-    color: '#9aa0a6',
-    marginTop: '2px',
-    textTransform: 'uppercase',
-  },
   filterRow: {
     display: 'flex',
     alignItems: 'center',
@@ -1292,6 +1208,7 @@ const styles: Record<string, CSSProperties> = {
   filterButtonGroup: {
     display: 'flex',
     gap: '6px',
+    flexWrap: 'wrap',
   },
   filterBtn: {
     padding: '6px 12px',
@@ -1323,82 +1240,111 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '13px',
     outline: 'none',
   },
-  assetGrid: {
+  blueprintGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
     gap: '16px',
   },
-  assetCard: {
+  blueprintCard: {
     background: 'rgba(255, 255, 255, 0.03)',
     border: '1px solid rgba(255, 255, 255, 0.08)',
     borderRadius: '10px',
     padding: '16px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '10px',
+    gap: '12px',
   },
-  assetCardHeader: {
+  blueprintCardHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: '8px',
   },
-  assetCardTitleWrap: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  assetCardName: {
-    fontSize: '14px',
-    fontWeight: 600,
+  blueprintCardTitle: {
+    fontSize: '15px',
+    fontWeight: 700,
     color: '#ffffff',
+    lineHeight: '1.3',
   },
   domainTag: {
-    alignSelf: 'flex-start',
     fontSize: '10px',
     fontWeight: 700,
     padding: '2px 6px',
     borderRadius: '4px',
+    background: 'rgba(66, 133, 244, 0.15)',
+    color: '#8ab4f8',
   },
   scoreBadge: {
-    fontSize: '12px',
-    fontWeight: 700,
-    padding: '4px 8px',
-    borderRadius: '6px',
-    whiteSpace: 'nowrap',
+    fontSize: '11px',
+    fontWeight: 600,
+    padding: '2px 6px',
+    borderRadius: '4px',
+    background: 'rgba(52, 168, 83, 0.15)',
+    color: '#81c995',
   },
-  assetRealityText: {
+  blueprintDesc: {
     margin: 0,
     fontSize: '12px',
     lineHeight: '1.45',
     color: '#bdc1c6',
   },
-  servicesRow: {
+  stackFlowBox: {
+    background: 'rgba(0, 0, 0, 0.25)',
+    borderRadius: '6px',
+    padding: '8px 10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  stackFlowRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  stackLabel: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#f28b82',
+    minWidth: '68px',
+  },
+  stackChipsWrap: {
     display: 'flex',
     flexWrap: 'wrap',
     gap: '4px',
-    alignItems: 'center',
   },
-  servicesLabel: {
-    fontSize: '11px',
-    color: '#9aa0a6',
-    marginRight: '2px',
-  },
-  serviceChip: {
+  sourceChip: {
     fontSize: '10px',
     padding: '2px 6px',
     borderRadius: '4px',
-    background: 'rgba(66, 133, 244, 0.1)',
+    background: 'rgba(242, 139, 130, 0.12)',
+    color: '#f28b82',
+  },
+  targetChip: {
+    fontSize: '10px',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    background: 'rgba(52, 168, 83, 0.15)',
+    color: '#81c995',
+  },
+  deliverablesBox: {
+    background: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: '6px',
+    padding: '8px 10px',
+  },
+  deliverablesTitle: {
+    fontSize: '11px',
+    fontWeight: 600,
     color: '#8ab4f8',
   },
-  recommendationBox: {
+  deliverablesList: {
+    margin: '4px 0 0',
+    padding: 0,
+    listStyle: 'none',
+  },
+  deliverableItem: {
     fontSize: '11px',
+    color: '#bdc1c6',
     lineHeight: '1.4',
-    padding: '8px 10px',
-    borderRadius: '6px',
-    background: 'rgba(255, 255, 255, 0.02)',
-    borderLeft: '3px solid #8ab4f8',
-    color: '#e8eaed',
+    marginBottom: '2px',
   },
   cardFooter: {
     display: 'flex',
@@ -1407,12 +1353,18 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 'auto',
     paddingTop: '8px',
     borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-    flexWrap: 'wrap',
     gap: '6px',
+    flexWrap: 'wrap',
   },
-  filesText: {
+  cardPrimaryBtn: {
+    background: '#4285F4',
+    border: 'none',
+    color: '#ffffff',
     fontSize: '11px',
-    color: '#80868b',
+    fontWeight: 600,
+    cursor: 'pointer',
+    padding: '6px 12px',
+    borderRadius: '4px',
   },
   cardSecondaryBtn: {
     background: 'rgba(255, 255, 255, 0.06)',
@@ -1421,27 +1373,17 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '11px',
     fontWeight: 500,
     cursor: 'pointer',
-    padding: '4px 8px',
+    padding: '5px 10px',
     borderRadius: '4px',
   },
-  cardRunBtn: {
-    background: 'rgba(66, 133, 244, 0.2)',
-    border: '1px solid rgba(66, 133, 244, 0.4)',
-    color: '#8ab4f8',
-    fontSize: '11px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    padding: '4px 8px',
-    borderRadius: '4px',
-  },
-  cardActionBtn: {
+  cardScopeBtn: {
     background: 'transparent',
     border: 'none',
     color: '#81c995',
     fontSize: '11px',
     fontWeight: 600,
     cursor: 'pointer',
-    padding: '4px 6px',
+    padding: '5px 8px',
   },
   splitLayout: {
     display: 'grid',
@@ -1481,15 +1423,6 @@ const styles: Record<string, CSSProperties> = {
     background: 'rgba(52, 168, 83, 0.1)',
     border: '1px solid rgba(52, 168, 83, 0.25)',
     marginBottom: '14px',
-  },
-  loadIngressNoticeBtn: {
-    marginLeft: '8px',
-    background: 'transparent',
-    border: 'none',
-    color: '#8ab4f8',
-    cursor: 'pointer',
-    fontWeight: 600,
-    padding: 0,
   },
   scanInlineBtn: {
     background: 'rgba(66, 133, 244, 0.15)',
@@ -1543,22 +1476,22 @@ const styles: Record<string, CSSProperties> = {
     transition: 'background 0.15s ease',
   },
   primaryButtonInline: {
-    padding: '8px 14px',
-    borderRadius: '6px',
+    padding: '6px 12px',
+    borderRadius: '4px',
     background: '#4285F4',
     border: 'none',
     color: '#ffffff',
-    fontSize: '12px',
+    fontSize: '11px',
     fontWeight: 600,
     cursor: 'pointer',
   },
   secondaryButton: {
-    padding: '8px 12px',
-    borderRadius: '6px',
+    padding: '6px 10px',
+    borderRadius: '4px',
     background: 'rgba(255, 255, 255, 0.06)',
     border: '1px solid rgba(255, 255, 255, 0.12)',
     color: '#ffffff',
-    fontSize: '12px',
+    fontSize: '11px',
     cursor: 'pointer',
   },
   resultHeader: {
@@ -1730,20 +1663,6 @@ const styles: Record<string, CSSProperties> = {
     color: '#9aa0a6',
     marginTop: '2px',
   },
-  blueprintChip: {
-    fontSize: '11px',
-    padding: '4px 8px',
-    borderRadius: '4px',
-    background: 'rgba(66, 133, 244, 0.15)',
-    color: '#8ab4f8',
-  },
-  skillChip: {
-    fontSize: '11px',
-    padding: '4px 8px',
-    borderRadius: '4px',
-    background: 'rgba(52, 168, 83, 0.15)',
-    color: '#81c995',
-  },
   actionPlanList: {
     margin: 0,
     paddingLeft: '18px',
@@ -1764,19 +1683,91 @@ const styles: Record<string, CSSProperties> = {
     color: '#f28b82',
     marginBottom: '4px',
   },
-  ingressTopBar: {
+  recipeSelectBtn: {
+    textAlign: 'left',
+    padding: '12px',
+    borderRadius: '8px',
+    background: 'rgba(255, 255, 255, 0.03)',
+    border: '1px solid rgba(255, 255, 255, 0.06)',
+    color: '#ffffff',
+    cursor: 'pointer',
+  },
+  recipeSelectBtnActive: {
+    textAlign: 'left',
+    padding: '12px',
+    borderRadius: '8px',
+    background: 'rgba(66, 133, 244, 0.15)',
+    border: '1px solid #4285F4',
+    color: '#ffffff',
+    cursor: 'pointer',
+  },
+  targetFilesBox: {
+    background: 'rgba(255, 255, 255, 0.02)',
+    border: '1px solid rgba(255, 255, 255, 0.06)',
+    borderRadius: '6px',
+    padding: '8px 12px',
+    fontSize: '12px',
+    marginBottom: '12px',
+  },
+  diffContainer: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '12px',
+    marginBottom: '14px',
+  },
+  diffPane: {
+    background: '#121316',
+    borderRadius: '6px',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  diffHeaderBefore: {
+    padding: '6px 10px',
+    background: 'rgba(242, 139, 130, 0.15)',
+    color: '#f28b82',
+    fontSize: '11px',
+    fontWeight: 600,
+    borderBottom: '1px solid rgba(242, 139, 130, 0.2)',
+  },
+  diffHeaderAfter: {
+    padding: '6px 10px',
+    background: 'rgba(52, 168, 83, 0.15)',
+    color: '#81c995',
+    fontSize: '11px',
+    fontWeight: 600,
+    borderBottom: '1px solid rgba(52, 168, 83, 0.2)',
+  },
+  diffCode: {
+    margin: 0,
+    padding: '10px',
+    fontSize: '11px',
+    fontFamily: 'monospace',
+    color: '#e8eaed',
+    whiteSpace: 'pre-wrap',
+    lineHeight: '1.4',
+    maxHeight: '220px',
+    overflowY: 'auto',
+  },
+  ingressExpanderCard: {
+    background: 'rgba(52, 168, 83, 0.05)',
+    border: '1px solid rgba(52, 168, 83, 0.2)',
+    borderRadius: '8px',
+    padding: '12px',
+    marginBottom: '14px',
+  },
+  ingressExpanderHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '14px',
-    flexWrap: 'wrap',
-    gap: '12px',
+    cursor: 'pointer',
   },
-  translatorPanes: {
+  translatorPanesMini: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    gap: '16px',
-    height: '420px',
+    gap: '12px',
+    height: '240px',
   },
   paneHalf: {
     display: 'flex',
@@ -1784,33 +1775,31 @@ const styles: Record<string, CSSProperties> = {
     height: '100%',
   },
   paneHeader: {
-    fontSize: '12px',
+    fontSize: '11px',
     fontWeight: 600,
     color: '#bdc1c6',
-    marginBottom: '6px',
+    marginBottom: '4px',
   },
   paneHeaderWithAction: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    fontSize: '12px',
+    fontSize: '11px',
     fontWeight: 600,
     color: '#bdc1c6',
-    marginBottom: '6px',
-    flexWrap: 'wrap',
-    gap: '6px',
+    marginBottom: '4px',
   },
-  codeTextarea: {
+  codeTextareaMini: {
     flex: 1,
     width: '100%',
-    padding: '12px',
-    borderRadius: '8px',
+    padding: '8px',
+    borderRadius: '6px',
     background: '#121316',
     border: '1px solid rgba(255, 255, 255, 0.1)',
     color: '#e8eaed',
     fontFamily: 'monospace',
-    fontSize: '12px',
-    lineHeight: '1.4',
+    fontSize: '11px',
+    lineHeight: '1.35',
     resize: 'none',
     boxSizing: 'border-box',
     outline: 'none',
@@ -1819,36 +1808,14 @@ const styles: Record<string, CSSProperties> = {
     background: 'rgba(66, 133, 244, 0.2)',
     border: '1px solid rgba(66, 133, 244, 0.4)',
     color: '#8ab4f8',
-    padding: '3px 8px',
+    padding: '2px 8px',
     borderRadius: '4px',
     fontSize: '11px',
     cursor: 'pointer',
-  },
-  agentApplyBtn: {
-    background: 'rgba(52, 168, 83, 0.2)',
-    border: '1px solid rgba(52, 168, 83, 0.4)',
-    color: '#81c995',
-    padding: '3px 8px',
-    borderRadius: '4px',
-    fontSize: '11px',
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  translationSummary: {
-    marginTop: '12px',
-    padding: '10px 14px',
-    borderRadius: '6px',
-    background: 'rgba(52, 168, 83, 0.1)',
-    border: '1px solid rgba(52, 168, 83, 0.2)',
-    fontSize: '12px',
-    color: '#81c995',
-    display: 'flex',
-    gap: '16px',
-    flexWrap: 'wrap',
   },
   skillsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
     gap: '16px',
   },
   skillCard: {
@@ -1863,12 +1830,13 @@ const styles: Record<string, CSSProperties> = {
   skillCardHeader: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   skillName: {
-    fontSize: '14px',
+    fontSize: '12px',
     fontWeight: 700,
     color: '#81c995',
+    fontFamily: 'monospace',
   },
   skillSourceBadge: {
     fontSize: '10px',
@@ -1883,18 +1851,26 @@ const styles: Record<string, CSSProperties> = {
     color: '#bdc1c6',
     lineHeight: '1.4',
   },
-  skillContentPreview: {
-    background: '#121316',
+  skillSection: {
+    background: 'rgba(0, 0, 0, 0.2)',
     borderRadius: '6px',
-    padding: '8px',
-    maxHeight: '100px',
-    overflow: 'hidden',
+    padding: '8px 10px',
   },
-  skillPre: {
-    margin: 0,
-    fontSize: '10px',
-    color: '#9aa0a6',
-    whiteSpace: 'pre-wrap',
+  skillSectionTitle: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#8ab4f8',
+  },
+  starterPromptPill: {
+    textAlign: 'left',
+    background: 'rgba(255, 255, 255, 0.04)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '4px',
+    padding: '4px 8px',
+    color: '#e8eaed',
+    fontSize: '11px',
+    cursor: 'pointer',
+    transition: 'background 0.15s ease',
   },
   skillActivateBtn: {
     flex: 1,
@@ -1915,24 +1891,6 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '6px',
     fontSize: '11px',
     fontWeight: 600,
-    cursor: 'pointer',
-  },
-  recipeSelectBtn: {
-    textAlign: 'left',
-    padding: '12px',
-    borderRadius: '8px',
-    background: 'rgba(255, 255, 255, 0.03)',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    color: '#ffffff',
-    cursor: 'pointer',
-  },
-  recipeSelectBtnActive: {
-    textAlign: 'left',
-    padding: '12px',
-    borderRadius: '8px',
-    background: 'rgba(66, 133, 244, 0.15)',
-    border: '1px solid #4285F4',
-    color: '#ffffff',
     cursor: 'pointer',
   },
 }

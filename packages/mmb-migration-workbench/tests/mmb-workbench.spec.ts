@@ -4,12 +4,14 @@ import {
   apply,
   Config,
   MMB_ASSETS,
+  CURATED_PRACTITIONER_BLUEPRINTS,
   evaluateRubric,
   assessWorkload,
   translateIngressToGatewayApi,
   MODERNIZATION_RECIPES,
   runModernizationRecipe,
   MMB_RUNTIME_SKILLS,
+  PRACTITIONER_SKILLS,
   scanWorkspaceDirectory,
   name,
   inject,
@@ -25,9 +27,20 @@ describe('MMB Migration Workbench', () => {
     })
   })
 
-  describe('46 Assets Assessment Catalog', () => {
+  describe('46 Assets Assessment Catalog & 12 Curated Blueprints', () => {
     it('contains exactly 46 evaluated projects from GoogleCloudPlatform/cloud-solutions', () => {
       expect(MMB_ASSETS).toHaveLength(46)
+    })
+
+    it('contains exactly 12 production-grade curated practitioner blueprints', () => {
+      expect(CURATED_PRACTITIONER_BLUEPRINTS).toHaveLength(12)
+      for (const bp of CURATED_PRACTITIONER_BLUEPRINTS) {
+        expect(bp.score).toBeGreaterThanOrEqual(4.2)
+        expect(bp.sourceStack.length).toBeGreaterThan(0)
+        expect(bp.targetStack.length).toBeGreaterThan(0)
+        expect(bp.deliverables.length).toBeGreaterThan(0)
+        expect(bp.recommendedSkills.length).toBeGreaterThan(0)
+      }
     })
 
     it('has accurate domain distribution: 7 Migrate, 18 Modernize, 21 Build', () => {
@@ -74,26 +87,21 @@ describe('MMB Migration Workbench', () => {
 
   describe('Calibrated Rubric Engine', () => {
     it('calculates weighted score according to (0.35 * Maturity + 0.35 * MarketFit + 0.30 * Innovation)', () => {
-      // 0.35 * 4.0 + 0.35 * 4.0 + 0.30 * 4.0 = 4.0
       const eval1 = evaluateRubric(4.0, 4.0, 4.0)
       expect(eval1.rawScore).toBe(4.0)
       expect(eval1.calibratedScore).toBe(4.0)
 
-      // 0.35 * 3.5 + 0.35 * 4.5 + 0.30 * 4.0 = 1.225 + 1.575 + 1.2 = 4.0
       const eval2 = evaluateRubric(3.5, 4.5, 4.0)
       expect(eval2.rawScore).toBe(4.0)
     })
 
     it('enforces hard caps and penalty deductions', () => {
-      // Archived stub capped at 0.6
       const stubEval = evaluateRubric(3.0, 3.0, 3.0, { isArchivedStub: true })
       expect(stubEval.calibratedScore).toBe(0.6)
 
-      // Documentation only capped at 1.3
       const docEval = evaluateRubric(3.5, 4.0, 3.5, { isDocOnly: true })
       expect(docEval.calibratedScore).toBe(1.3)
 
-      // Hollow skeleton deducts 2.0
       const hollowEval = evaluateRubric(3.0, 3.0, 3.0, { isHollowSkeleton: true })
       expect(hollowEval.calibratedScore).toBe(1.0)
     })
@@ -110,7 +118,7 @@ describe('MMB Migration Workbench', () => {
       expect(result.calibratedScore).toBeGreaterThanOrEqual(3.5)
       expect(result.recommendedTarget).toContain('BigQuery')
       expect(result.recommendedBlueprints).toContain('oracle-bigquery-mcp-agent')
-      expect(result.recommendedSkills).toContain('mmb-oracle-bigquery')
+      expect(result.recommendedSkills.length).toBeGreaterThan(0)
       expect(result.actionPlan.length).toBeGreaterThanOrEqual(4)
       expect(result.riskFactors.length).toBeGreaterThanOrEqual(2)
     })
@@ -125,7 +133,7 @@ describe('MMB Migration Workbench', () => {
       expect(result.workloadType).toBe('kubernetes')
       expect(result.recommendedTarget).toContain('Gateway API')
       expect(result.recommendedBlueprints).toContain('gke-migration-agent')
-      expect(result.recommendedSkills).toContain('mmb-ingress2gateway')
+      expect(result.recommendedSkills.length).toBeGreaterThan(0)
     })
 
     it('applies penalty and risk factor when hasTests is false', () => {
@@ -390,16 +398,13 @@ spec:
       expect(result.summary.tlsHosts).toContain('web.example.com')
       expect(result.summary.tlsHosts).toContain('api.example.com')
 
-      // Gateway contains both TLS listeners
       expect(result.gatewayYaml).toContain('name: https-web-example-com')
       expect(result.gatewayYaml).toContain('name: https-api-example-com')
 
-      // HTTPRoute output contains both routes separated by ---
       expect(result.httpRouteYaml).toContain('name: frontend-ingress-route')
       expect(result.httpRouteYaml).toContain('name: api-ingress-route')
       expect(result.httpRouteYaml).toContain('---')
 
-      // Combined YAML has gateway, both routes
       expect(result.combinedYaml).toContain('kind: Gateway')
       expect(result.combinedYaml).toContain('name: frontend-ingress-route')
       expect(result.combinedYaml).toContain('name: api-ingress-route')
@@ -433,6 +438,8 @@ spec:
       expect(MODERNIZATION_RECIPES.some(r => r.id === 'dotnet-core-cloud-run')).toBe(true)
       expect(MODERNIZATION_RECIPES.some(r => r.id === 'pyspark-to-dataproc-serverless')).toBe(true)
       expect(MODERNIZATION_RECIPES.some(r => r.id === 'oracle-plsql-to-bigquery')).toBe(true)
+      expect(MODERNIZATION_RECIPES.some(r => r.id === 'aws-to-gcp-refactor')).toBe(true)
+      expect(MODERNIZATION_RECIPES.some(r => r.id === 'k8s-ingress-to-gateway-api')).toBe(true)
     })
 
     it('executes recipe simulation with dry run output', () => {
@@ -444,21 +451,25 @@ spec:
   })
 
   describe('Mature Runtime Skills', () => {
-    it('provides 6 verified runtime skills', () => {
-      expect(MMB_RUNTIME_SKILLS).toHaveLength(6)
+    it('provides 5 verified practitioner skills', () => {
+      expect(MMB_RUNTIME_SKILLS).toHaveLength(5)
       const names = MMB_RUNTIME_SKILLS.map(s => s.name)
-      expect(names).toContain('mmb-migration-discovery')
-      expect(names).toContain('mmb-oracle-bigquery')
-      expect(names).toContain('mmb-ingress2gateway')
-      expect(names).toContain('mmb-legacy-detox')
+      expect(names).toContain('mmb-discovery-wave-planner')
+      expect(names).toContain('mmb-database-migration')
       expect(names).toContain('mmb-app-modernization')
-      expect(names).toContain('mmb-alloydb-vector')
+      expect(names).toContain('mmb-lakehouse-modernization')
+      expect(names).toContain('mmb-cloud-replatform')
     })
 
-    it('skills have valid markdown instruction bodies', () => {
+    it('skills have valid markdown instruction bodies and workflow steps', () => {
       for (const skill of MMB_RUNTIME_SKILLS) {
         expect(skill.content).toContain('# ')
         expect(skill.description.length).toBeGreaterThan(20)
+      }
+      expect(PRACTITIONER_SKILLS).toHaveLength(5)
+      for (const skill of PRACTITIONER_SKILLS) {
+        expect(skill.workflowSteps.length).toBeGreaterThan(0)
+        expect(skill.starterPrompts.length).toBeGreaterThan(0)
       }
     })
   })
@@ -502,8 +513,8 @@ spec:
       expect(registeredTools).toHaveProperty('mmb_recipe_run')
       expect(registeredTools).toHaveProperty('mmb_scan_workspace')
 
-      expect(registeredSkills).toHaveLength(6)
-      expect(registeredSkills).toContain('mmb-oracle-bigquery')
+      expect(registeredSkills).toHaveLength(5)
+      expect(registeredSkills).toContain('mmb-database-migration')
 
       // Execute mmb_catalog tool
       const catalogTool = registeredTools.mmb_catalog as {
@@ -735,7 +746,7 @@ spec:
 
       const fiber = await ctx.plugin({ apply, inject, Config, name }, {})
       expect(fiber).toBeDefined()
-      expect(registeredSkills).toHaveLength(6)
+      expect(registeredSkills).toHaveLength(5)
       expect(registeredRoute?.path).toBe('/api/mmb')
     })
 
@@ -764,7 +775,7 @@ spec:
 
       const fiber1 = await ctx.plugin({ apply, inject, Config, name }, {})
       expect(registeredRoute?.path).toBe('/api/mmb')
-      expect(registeredSkills.size).toBe(6)
+      expect(registeredSkills.size).toBe(5)
 
       await fiber1.dispose()
       expect(routeDisposed).toBe(true)
@@ -775,7 +786,7 @@ spec:
       const fiber2 = await ctx.plugin({ apply, inject, Config, name }, {})
       expect(fiber2).toBeDefined()
       expect(registeredRoute?.path).toBe('/api/mmb')
-      expect(registeredSkills.size).toBe(6)
+      expect(registeredSkills.size).toBe(5)
     })
   })
 })

@@ -25,7 +25,7 @@ export function MigrationToolView({
   const textOutput = typeof rawResult === 'string' ? rawResult : JSON.stringify(rawResult ?? args, null, 2)
 
   let title = 'MMB Migration Action'
-  let targetTab: 'portfolio' | 'assessment' | 'ingress' | 'skills' | 'recipes' = 'portfolio'
+  let targetTab: 'portfolio' | 'assessment' | 'skills' | 'recipes' = 'portfolio'
   let previewText = callId
 
   if (toolName === 'mmb_assess_workload') {
@@ -34,7 +34,7 @@ export function MigrationToolView({
     previewText = `Platform: ${String(args.source_platform ?? 'cloud').toUpperCase()}`
   } else if (toolName === 'mmb_ingress_translate') {
     title = 'MMB Ingress -> Gateway API'
-    targetTab = 'ingress'
+    targetTab = 'recipes'
     previewText = 'GKE Gateway API translation'
   } else if (toolName === 'mmb_catalog') {
     title = 'MMB 46 Assets Catalog Query'
