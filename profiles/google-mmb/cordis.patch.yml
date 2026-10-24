@@ -52,3 +52,11 @@
       config:
         enableRuntimeSkills: true
         enableHttpRoutes: true
+
+    - id: llm-ollama
+      name: '@google/dsh-llm-ollama'
+      config:
+        baseURL: 'http://127.0.0.1:11434'
+        defaultModel: 'qwen3:32b'
+        enableTools: true
+

@@ -19,6 +19,8 @@ presets:
       - mmb_ingress_translate
       - mmb_generate_migration_plan
       - mmb_recipe_run
+      - ollama_models
+      - ollama_status
 
   - id: gemini-3.7-flash
     name: 'Gemini 3.7 Flash'
@@ -36,6 +38,8 @@ presets:
       - mmb_ingress_translate
       - mmb_generate_migration_plan
       - mmb_recipe_run
+      - ollama_models
+      - ollama_status
 
   - id: gemini-3.1-pro
     name: 'Gemini 3.1 Pro (Deep Reasoning)'
@@ -53,3 +57,101 @@ presets:
       - mmb_ingress_translate
       - mmb_generate_migration_plan
       - mmb_recipe_run
+      - ollama_models
+      - ollama_status
+
+  - id: ollama-qwen3-32b
+    name: 'Ollama Qwen 3 32B (Local)'
+    description: 'Local open-weight hybrid thinking and tool-calling agent powered by Alibaba Qwen 3 32B via Ollama'
+    model:
+      provider: ollama
+      model: 'qwen3:32b'
+    tools:
+      - antigravity_run
+      - antigravity_models
+      - antigravity_agents
+      - antigravity_cli
+      - mmb_catalog
+      - mmb_assess_workload
+      - mmb_ingress_translate
+      - mmb_generate_migration_plan
+      - mmb_recipe_run
+      - ollama_models
+      - ollama_status
+
+  - id: ollama-deepseek-r1-32b
+    name: 'Ollama DeepSeek R1 32B (Local)'
+    description: 'Local chain-of-thought reasoning agent powered by DeepSeek R1 32B via Ollama'
+    model:
+      provider: ollama
+      model: 'deepseek-r1:32b'
+    tools:
+      - antigravity_run
+      - antigravity_models
+      - antigravity_agents
+      - antigravity_cli
+      - mmb_catalog
+      - mmb_assess_workload
+      - mmb_ingress_translate
+      - mmb_generate_migration_plan
+      - mmb_recipe_run
+      - ollama_models
+      - ollama_status
+
+  - id: ollama-gemma3-27b
+    name: 'Ollama Gemma 3 27B Vision (Local)'
+    description: 'Local multimodal vision and text agent powered by Google Gemma 3 27B via Ollama'
+    model:
+      provider: ollama
+      model: 'gemma3:27b'
+    tools:
+      - antigravity_run
+      - antigravity_models
+      - antigravity_agents
+      - antigravity_cli
+      - mmb_catalog
+      - mmb_assess_workload
+      - mmb_ingress_translate
+      - mmb_generate_migration_plan
+      - mmb_recipe_run
+      - ollama_models
+      - ollama_status
+
+  - id: ollama-qwen2.5-coder-32b
+    name: 'Ollama Qwen 2.5 Coder 32B (Local)'
+    description: 'Local code modernization and refactoring agent powered by Qwen 2.5 Coder 32B via Ollama'
+    model:
+      provider: ollama
+      model: 'qwen2.5-coder:32b'
+    tools:
+      - antigravity_run
+      - antigravity_models
+      - antigravity_agents
+      - antigravity_cli
+      - mmb_catalog
+      - mmb_assess_workload
+      - mmb_ingress_translate
+      - mmb_generate_migration_plan
+      - mmb_recipe_run
+      - ollama_models
+      - ollama_status
+
+  - id: ollama-llama3.3-70b
+    name: 'Ollama Llama 3.3 70B (Local)'
+    description: 'Local enterprise instruction and tool-calling agent powered by Meta Llama 3.3 70B via Ollama'
+    model:
+      provider: ollama
+      model: 'llama3.3:70b'
+    tools:
+      - antigravity_run
+      - antigravity_models
+      - antigravity_agents
+      - antigravity_cli
+      - mmb_catalog
+      - mmb_assess_workload
+      - mmb_ingress_translate
+      - mmb_generate_migration_plan
+      - mmb_recipe_run
+      - ollama_models
+      - ollama_status
+

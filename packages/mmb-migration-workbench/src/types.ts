@@ -48,6 +48,34 @@ export interface PenaltyDeduction {
   readonly deduction: number
 }
 
+export interface WavePlanItem {
+  readonly wave: string
+  readonly durationWeeks: number
+  readonly focus: string
+  readonly deliverables: readonly string[]
+  readonly exitCriteria: string
+}
+
+export interface EffortBreakdown {
+  readonly discoveryWeeks: number
+  readonly engineeringWeeks: number
+  readonly testingCutoverWeeks: number
+}
+
+export interface EffortEstimate {
+  readonly baselinePersonWeeks: number
+  readonly aiAcceleratedPersonWeeks: number
+  readonly savingsPercent: number
+  readonly breakdown: EffortBreakdown
+}
+
+export interface TcoModel {
+  readonly estimatedAnnualSavingsPercent: number
+  readonly licenseOptimization: string
+  readonly opsEfficiencyGain: string
+  readonly riskMitigationSummary: string
+}
+
 export interface WorkloadAssessmentResult {
   readonly workloadType: WorkloadType
   readonly sourcePlatform: CloudSource
@@ -62,6 +90,10 @@ export interface WorkloadAssessmentResult {
   readonly recommendedSkills: readonly string[]
   readonly actionPlan: readonly string[]
   readonly riskFactors: readonly string[]
+  readonly wavePlan: readonly WavePlanItem[]
+  readonly effortEstimate: EffortEstimate
+  readonly tcoModel: TcoModel
+  readonly markdownReport: string
 }
 
 export interface IngressTranslateRequest {

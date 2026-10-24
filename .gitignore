@@ -1,6 +1,8 @@
-node_modules/
+node_modules
 dist/
 lib/
+!packages/llm-ollama/lib/
+!packages/llm-ollama/lib/*.js
 *.tsbuildinfo
 *.log
 .DS_Store

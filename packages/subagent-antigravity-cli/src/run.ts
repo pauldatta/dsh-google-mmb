@@ -126,7 +126,6 @@ export function startAntigravitySubagentRun(
 
   return {
     id: runId,
-    localAgent: undefined,
     result: resultPromise,
     dispose: async () => {
       if (childProcess && !childProcess.killed) {

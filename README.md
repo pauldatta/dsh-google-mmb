@@ -33,7 +33,8 @@ Rather than maintaining a divergent fork of DeepSeek Harness, `dsh-google-mmb` u
 │   ✔ @google/dsh-mmb-migration-workbench  (Migration Center Studio)     │
 │   ✔ @google/dsh-tool-antigravity         (Gemini Antigravity CLI Tool) │
 │   ✔ @google/dsh-subagent-antigravity-cli (Antigravity ACP Subagent)   │
-│   ✔ Default Agent Model -> Google Gemini 3.7 Flash                     │
+│   ✔ @google/dsh-llm-ollama               (Local & Remote Ollama LLM)   │
+│   ✔ Default Agent Model -> Google Gemini 3.8 Flash                     │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -53,16 +54,43 @@ Full-stack Migration Center Workbench plugin providing:
 
 ### 2. `@google/dsh-tool-antigravity` (`packages/tool-antigravity`)
 Exposes Antigravity CLI tools to the harness agent loop:
-- `antigravity_run`: Execute tasks and prompts with the Gemini model family (`gemini-3.7-flash-high`, `gemini-3.1-pro-high`).
+- `antigravity_run`: Execute tasks and prompts with the Gemini model family (`gemini-3.8-flash-high`, `gemini-3.7-flash-high`, `gemini-3.1-pro-high`).
 - `antigravity_models`: Query available Gemini models in the environment.
 - `antigravity_agents`: Enumerate available Antigravity agent configurations.
 
 ### 3. `@google/dsh-subagent-antigravity-cli` (`packages/subagent-antigravity-cli`)
 Adapter enabling DeepSeek Harness agents to delegate complex subagent tasks directly to Antigravity CLI and Agent API processes.
 
-### 4. Enterprise Profiles (`profiles/google-mmb/`)
-- `cordis.patch.yml`: Hard-disables DeepSeek API plugins and mounts Google MMB plugins.
-- `agent.cordis.yml`: Agent presets configured for Gemini 3.7 Flash and Gemini 3.1 Pro Preview.
+### 4. `@google/dsh-llm-ollama` (`packages/llm-ollama`)
+First-class local and self-hosted Ollama LLM provider plugin (`provider: "ollama"`):
+- **Zero-Auth Local Access & Optional Bearer Auth**: Connects to `http://127.0.0.1:11434` (or `OLLAMA_HOST`) with zero authentication required by default, plus optional Bearer token support via `OLLAMA_API_KEY`.
+- **Dynamic Model Discovery**: Interrogates `GET /api/tags` and `POST /api/show` (with automatic fallback to `GET /v1/models`) to enrich local models with parameter size, quantization level, context window, vision (`['text', 'image']`), thinking/reasoning (`low`/`medium`/`high`), and tool-calling capabilities, plus a built-in 5-model fallback catalog (`qwen3:32b`, `deepseek-r1:32b`, `llama3.3:70b`, `gemma3:27b`, `qwen2.5-coder:32b`).
+- **NDJSON Streaming & Thinking Extraction**: Streams `POST /api/chat` responses, extracting both native `message.thinking` and inline `<think>...</think>` blocks across chunk boundaries, function `tool_calls`, and multimodal base64 image inputs.
+- **Runtime Diagnostic Tools**: Exposes `ollama_status` and `ollama_models` tools to inspect local Ollama daemon health, loaded VRAM models (`/api/ps`), and installed tags.
+
+### 5. Enterprise Profiles (`profiles/google-mmb/`)
+- `cordis.patch.yml`: Hard-disables DeepSeek API plugins and mounts Google MMB, Antigravity, and Ollama plugins (with `gemini-3.8-flash` on `google` as primary default).
+- `agent.cordis.yml`: Agent presets configured for Gemini 3.8 Flash (default), Gemini 3.7 Flash, Gemini 3.1 Pro Preview, and local Ollama presets (`ollama-qwen3-32b`, `ollama-deepseek-r1-32b`, `ollama-gemma3-27b`, `ollama-qwen2.5-coder-32b`, `ollama-llama3.3-70b`).
+
+---
+
+## Local Open-Weight Models with Ollama (`@google/dsh-llm-ollama`)
+
+While Google Gemini (`gemini-3.8-flash`) is the primary default model, you can seamlessly switch to local open-weight models served by Ollama:
+
+```bash
+# 1. Start the local Ollama daemon (when installed on your workstation)
+ollama serve
+
+# 2. Pull one or more recommended local models
+ollama pull qwen3:32b
+ollama pull deepseek-r1:32b
+ollama pull gemma3:27b
+ollama pull qwen2.5-coder:32b
+ollama pull llama3.3:70b
+```
+
+Select any `ollama-*` preset in the UI/CLI or switch models dynamically via `/model ollama/qwen3:32b`.
 
 ---
 
@@ -72,7 +100,7 @@ Adapter enabling DeepSeek Harness agents to delegate complex subagent tasks dire
 - Node.js >= 22.0.0
 - `pnpm` >= 9.0.0
 - DeepSeek Harness installed or available on PATH
-- Google Gemini API key or Google Cloud Application Default Credentials (ADC)
+- Google Gemini API key or Google Cloud Application Default Credentials (ADC), or a local Ollama server
 
 ### Environment Variables
 Configure your environment:
@@ -81,6 +109,10 @@ export GEMINI_API_KEY="your-gemini-api-key"
 # Or configure Google Cloud project & location:
 export GOOGLE_CLOUD_PROJECT="your-gcp-project-id"
 export GOOGLE_CLOUD_LOCATION="global"
+
+# Optional local/remote Ollama configuration:
+export OLLAMA_HOST="http://127.0.0.1:11434"
+export OLLAMA_API_KEY="" # Optional Bearer token for authenticated remote Ollama proxies
 
 # Optional server configuration:
 export HOST="0.0.0.0"
@@ -127,6 +159,7 @@ The test suite covers:
 - Ingress-to-Gateway API AST generation and edge cases
 - Modernization recipe execution
 - Antigravity CLI binary discovery and environment building
+- Ollama LLM adapter discovery (`/api/tags`, `/api/show`, `/v1/models`), NDJSON streaming, `<think>` extraction, tool calls, multimodal vision, and offline diagnostics
 
 ---
 
