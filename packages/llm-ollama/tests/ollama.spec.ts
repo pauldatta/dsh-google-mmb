@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import {
+import { Context } from '@deepseek-ai/cordis'
+import LlmRuntime, {
   BlockAssembler,
   LlmError,
   MessageId,
@@ -13,7 +14,10 @@ import {
   type LlmModelDiscoveryRequest,
   type StreamChunk,
 } from '@deepseek-ai/dsh-llm'
+import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
+import { ToolsService, projectToolSchema } from '@deepseek-ai/dsh-tools'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import * as ollamaPlugin from '../src/index.ts'
 import {
   Config,
   DEFAULT_OLLAMA_MODELS,
@@ -21,7 +25,7 @@ import {
   ThinkingTagParser,
   apply,
   inferModelCapabilities,
-   inject,
+  inject,
   name,
   normalizeOllamaBaseUrl,
   type OllamaChatRequest,
@@ -286,6 +290,197 @@ describe('@google/dsh-llm-ollama plugin & OllamaAdapter', () => {
       await invariantPlugin.apply(mockCtx as never)
       expect(invariantPlugin.name).toBe('llm-ollama-invariant')
       expect(registeredPkg).toBe('@google/dsh-llm-ollama')
+    })
+
+    it('mounts via real Cordis await ctx.plugin(ollamaPlugin, config) without optional services, defers tools/systemPrompt injection, and streams inline ImageBlock without attachments service', async () => {
+      const mock = await startMockOllamaServer((req, res) => {
+        if (req.method === 'GET' && req.url === '/api/tags') {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ models: [{ name: 'gemma3:27b' }] }))
+          return
+        }
+        if (req.method === 'POST' && req.url === '/api/chat') {
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+          res.end(
+            JSON.stringify({
+              model: 'gemma3:27b',
+              message: { role: 'assistant', content: 'Inline image received without attachments service.' },
+              done: true,
+              done_reason: 'stop',
+              prompt_eval_count: 40,
+              eval_count: 7,
+            }) + '\n',
+          )
+          return
+        }
+        res.writeHead(404)
+        res.end()
+      })
+      activeClose = mock.close
+
+      // 1. Mount on a real Cordis Context with ONLY LlmRuntime (no tools, no systemPrompt, no attachments)
+      const ctx = new Context()
+      await ctx.plugin(LlmRuntime)
+      await ctx.plugin(ollamaPlugin, {
+        baseURL: mock.baseUrl,
+        defaultModel: 'gemma3:27b',
+        enrichWithShow: false,
+        enableTools: true,
+      })
+
+      expect(ctx.llm.listProviders()).toEqual([{ id: 'ollama', name: 'Ollama (Local)' }])
+
+      // 2. Stream a user message containing an inline ImageBlock while 'attachments' service is unmounted
+      const prepared = await ctx.llm.prepareCall({
+        provider: 'ollama',
+        model: 'gemma3:27b',
+      })
+      const assembler = new BlockAssembler()
+      for await (const chunk of prepared.stream({
+        ...prepared.config,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Inspect inline diagram' },
+              {
+                type: 'image',
+                attachment: {
+                  attachmentId: 'sha256:abcdef',
+                  mediaType: 'image/png',
+                  bytes: 4,
+                  width: 16,
+                  height: 16,
+                  base64: 'iVBORw==',
+                } as unknown as ImageAttachmentRef,
+              },
+            ],
+          },
+        ],
+      })) {
+        assembler.push(chunk)
+      }
+
+      expect(assembler.finish).toEqual({ kind: 'stop' })
+      expect(assembler.blocks()).toEqual([
+        { type: 'text', text: 'Inline image received without attachments service.' },
+      ])
+      const chatReq = mock.requests.find(r => r.url === '/api/chat')
+      const sentBody = chatReq?.bodyJson as OllamaChatRequest
+      expect(sentBody.messages[0]).toEqual({
+        role: 'user',
+        content: 'Inspect inline diagram',
+        images: ['iVBORw=='],
+      })
+
+      // 3. Now mount SystemPrompt and ToolsService AFTER ollamaPlugin to verify deferred ctx.inject registration
+      await ctx.plugin(SystemPrompt)
+      await ctx.plugin(ToolsService)
+
+      expect(ctx.tools.get('ollama_models')).toBeDefined()
+      expect(ctx.tools.get('ollama_status')).toBeDefined()
+
+      ctx.tools.setExecutor({
+        describe: defs => ({ schemas: defs.map(d => projectToolSchema(d, true)) }),
+        execute: async () => ({ results: [], additionalContexts: [], concluded: false }),
+      })
+      const assembly = await ctx.systemPrompt.assemble({})
+      const rendered = renderPrompt(assembly)
+      expect(rendered).toContain('provider: "ollama"')
+      expect(rendered).toContain('ollama_status')
+      expect(rendered).toContain('ollama_models')
+    })
+
+    it('mounts via real Cordis await ctx.plugin(ollamaPlugin, config) when optional services (tools, systemPrompt, attachments) are pre-mounted', async () => {
+      const mock = await startMockOllamaServer((req, res) => {
+        if (req.method === 'POST' && req.url === '/api/chat') {
+          res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+          res.end(
+            JSON.stringify({
+              model: 'gemma3:27b',
+              message: { role: 'assistant', content: 'Stored attachment image received.' },
+              done: true,
+              done_reason: 'stop',
+              prompt_eval_count: 48,
+              eval_count: 6,
+            }) + '\n',
+          )
+          return
+        }
+        res.writeHead(404)
+        res.end()
+      })
+      activeClose = mock.close
+
+      const samplePngBytes = new Uint8Array([137, 80, 78, 71])
+      const expectedBase64 = Buffer.from(samplePngBytes).toString('base64')
+      const fakeAttachmentRef = {
+        attachmentId: 'sha256:987654',
+        mediaType: 'image/png',
+        bytes: samplePngBytes.byteLength,
+        width: 32,
+        height: 32,
+      } as unknown as ImageAttachmentRef
+
+      const ctx = new Context()
+      await ctx.plugin(SystemPrompt)
+      await ctx.plugin(ToolsService)
+      await ctx.plugin(LlmRuntime)
+      ctx.provide('attachments', {
+        readImage: async () => ({
+          ref: fakeAttachmentRef,
+          data: samplePngBytes,
+        }),
+      })
+
+      await ctx.plugin(ollamaPlugin, {
+        baseURL: mock.baseUrl,
+        defaultModel: 'gemma3:27b',
+        enrichWithShow: false,
+        enableTools: true,
+      })
+
+      expect(ctx.tools.get('ollama_models')).toBeDefined()
+      expect(ctx.tools.get('ollama_status')).toBeDefined()
+
+      ctx.tools.setExecutor({
+        describe: defs => ({ schemas: defs.map(d => projectToolSchema(d, true)) }),
+        execute: async () => ({ results: [], additionalContexts: [], concluded: false }),
+      })
+      const rendered = renderPrompt(await ctx.systemPrompt.assemble({}))
+      expect(rendered).toContain('provider: "ollama"')
+
+      const prepared = await ctx.llm.prepareCall({
+        provider: 'ollama',
+        model: 'gemma3:27b',
+      })
+      const assembler = new BlockAssembler()
+      for await (const chunk of prepared.stream({
+        ...prepared.config,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Inspect stored attachment' },
+              { type: 'image', attachment: fakeAttachmentRef },
+            ],
+          },
+        ],
+      })) {
+        assembler.push(chunk)
+      }
+
+      expect(assembler.finish).toEqual({ kind: 'stop' })
+      expect(assembler.blocks()).toEqual([
+        { type: 'text', text: 'Stored attachment image received.' },
+      ])
+      const chatReq = mock.requests.find(r => r.url === '/api/chat')
+      const sentBody = chatReq?.bodyJson as OllamaChatRequest
+      expect(sentBody.messages[0]).toEqual({
+        role: 'user',
+        content: 'Inspect stored attachment',
+        images: [expectedBase64],
+      })
     })
   })
 

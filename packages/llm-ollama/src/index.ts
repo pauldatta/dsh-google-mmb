@@ -179,12 +179,20 @@ function registerOllamaTools(tools: ToolsService, adapter: OllamaAdapter): Array
 }
 
 export function apply(ctx: Context, config: OllamaPluginConfig = {}): () => void {
-  const safeGet = <T>(serviceName: string): T | undefined => {
-    if (typeof ctx.get === 'function') {
-      const resolved = ctx.get(serviceName as never) as T | undefined
-      if (resolved !== undefined) return resolved
+  const safeGet = <T>(serviceName: string, targetCtx: Context = ctx): T | undefined => {
+    if (typeof targetCtx?.get === 'function') {
+      try {
+        const resolved = targetCtx.get(serviceName as never) as T | undefined
+        if (resolved !== undefined) return resolved
+      } catch {
+        // Fall through to guarded property access for plain mock contexts
+      }
     }
-    return (ctx as unknown as Record<string, T | undefined>)[serviceName]
+    try {
+      return (targetCtx as unknown as Record<string, T | undefined>)?.[serviceName]
+    } catch {
+      return undefined
+    }
   }
 
   const adapter = new OllamaAdapter({
@@ -240,23 +248,60 @@ export function apply(ctx: Context, config: OllamaPluginConfig = {}): () => void
       disposers.push(...registerOllamaTools(tools, adapter))
     } else if (typeof ctx.inject === 'function') {
       ctx.inject(['tools'], (childCtx) => {
-        const injectedTools = safeGet<ToolsService>('tools') ?? childCtx.tools
+        const injectedTools =
+          safeGet<ToolsService>('tools', childCtx) ?? safeGet<ToolsService>('tools')
         if (injectedTools && typeof injectedTools.register === 'function') {
-          disposers.push(...registerOllamaTools(injectedTools, adapter))
+          const toolDisposers = registerOllamaTools(injectedTools, adapter)
+          disposers.push(...toolDisposers)
+          return () => {
+            while (toolDisposers.length > 0) {
+              try {
+                toolDisposers.pop()?.()
+              } catch {
+                // Ignore individual disposal errors
+              }
+            }
+          }
         }
       })
     }
   }
 
   if (config.injectSystemPrompt !== false) {
+    const registerPromptSection = (
+      systemPrompt: Context['systemPrompt'] | undefined,
+    ): (() => void) | undefined => {
+      if (systemPrompt && typeof systemPrompt.section === 'function') {
+        const disposePrompt = systemPrompt.section({
+          name: 'llm:ollama',
+          order: 125,
+          text: OLLAMA_SYSTEM_PROMPT,
+        })
+        if (typeof disposePrompt === 'function') {
+          disposers.push(disposePrompt)
+          return disposePrompt
+        }
+      }
+      return undefined
+    }
+
     const systemPrompt = safeGet<Context['systemPrompt']>('systemPrompt')
     if (systemPrompt && typeof systemPrompt.section === 'function') {
-      const disposePrompt = systemPrompt.section({
-        name: 'llm:ollama',
-        order: 125,
-        text: OLLAMA_SYSTEM_PROMPT,
+      registerPromptSection(systemPrompt)
+    } else if (typeof ctx.inject === 'function') {
+      ctx.inject(['systemPrompt'], (childCtx) => {
+        const injectedSystemPrompt =
+          safeGet<Context['systemPrompt']>('systemPrompt', childCtx)
+          ?? safeGet<Context['systemPrompt']>('systemPrompt')
+        const disposePrompt = registerPromptSection(injectedSystemPrompt)
+        return () => {
+          try {
+            disposePrompt?.()
+          } catch {
+            // Ignore individual disposal errors
+          }
+        }
       })
-      if (typeof disposePrompt === 'function') disposers.push(disposePrompt)
     }
   }
 
